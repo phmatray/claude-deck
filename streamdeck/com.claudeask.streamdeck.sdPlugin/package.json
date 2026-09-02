@@ -1,0 +1,9 @@
+{
+  "name": "claude-answer-streamdeck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stream Deck plugin that shows Claude Code's question on the keys.",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

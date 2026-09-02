@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+"use strict";
+// Put a question on the Stream Deck and block until a key is pressed.
+//
+//   echo '{"question":"Which one?","options":["A","B"]}' | claude-ask
+//
+// stdin   JSON: { question, header?, options[], timeout?, context? }
+// stdout  JSON: { index, label, cancelled }
+// exit    0 answered · 2 answer in the terminal instead · 3 timed out · 4 deck busy
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { randomUUID } = require("crypto");
+
+const STATE_DIR = process.env.CLAUDE_ASK_DIR || path.join(os.homedir(), ".claude-ask");
+const QUESTION_FILE = path.join(STATE_DIR, "question.json");
+const ANSWER_FILE = path.join(STATE_DIR, "answer.json");
+const LOCK_FILE = path.join(STATE_DIR, "lock");
+const POLL_MS = 150;
+const STALE_LOCK_MS = 15 * 60 * 1000;
+const MAX_OPTIONS = 10; // the profile ships ten option keys
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function rm(file) {
+  try {
+    fs.unlinkSync(file);
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+  }
+}
+
+function lockHolderGone() {
+  try {
+    const { pid, at } = JSON.parse(fs.readFileSync(LOCK_FILE, "utf8"));
+    if (Date.now() - Date.parse(at) > STALE_LOCK_MS) return true;
+    process.kill(pid, 0); // throws if the holder died
+    return false;
+  } catch (err) {
+    return err.code !== "ENOENT";
+  }
+}
+
+// One question owns the deck at a time, so concurrent sessions queue instead of clobbering.
+async function acquireLock(waitMs) {
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      const fd = fs.openSync(LOCK_FILE, "wx");
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
+      fs.closeSync(fd);
+      return true;
+    } catch (err) {
+      if (err.code !== "EEXIST") throw err;
+      if (lockHolderGone()) {
+        rm(LOCK_FILE);
+        continue;
+      }
+      if (Date.now() >= deadline) return false;
+      await sleep(POLL_MS);
+    }
+  }
+}
+
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    process.stdin.on("data", (c) => chunks.push(c));
+    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    process.stdin.on("error", reject);
+  });
+}
+
+// A killed process must still release the deck, or it stays stuck on the ask profile.
+function installSignalCleanup() {
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.on(sig, () => {
+      rm(QUESTION_FILE);
+      rm(LOCK_FILE);
+      process.exit(3);
+    });
+  }
+}
+
+async function main() {
+  installSignalCleanup();
+  const raw = await readStdin();
+  let spec;
+  try {
+    spec = JSON.parse(raw);
+  } catch (err) {
+    process.stderr.write(`claude-ask: stdin is not valid JSON (${err.message})\n`);
+    process.exit(1);
+  }
+
+  const options = (spec.options || []).map((o) => (typeof o === "string" ? { label: o } : o));
+  if (!options.length) {
+    process.stderr.write("claude-ask: no options given\n");
+    process.exit(1);
+  }
+  if (options.length > MAX_OPTIONS) {
+    process.stderr.write(`claude-ask: at most ${MAX_OPTIONS} options fit on the deck\n`);
+    process.exit(1);
+  }
+
+  if (!(await acquireLock(10_000))) {
+    process.stderr.write("claude-ask: the deck is busy with another question\n");
+    process.exit(4);
+  }
+
+  const question = {
+    id: randomUUID(),
+    header: spec.header || "Question",
+    question: spec.question || "",
+    // Shown on the top-left key so you can tell which session is asking.
+    context: spec.context || path.basename(process.cwd()),
+    options,
+    createdAt: new Date().toISOString(),
+  };
+  const timeoutMs = (spec.timeout == null ? 180 : spec.timeout) * 1000;
+
+  // The full text goes to the terminal; the keys only have room for the labels.
+  process.stderr.write(`\n${question.question || question.header}\n`);
+  options.forEach((o, i) =>
+    process.stderr.write(`  ${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}\n`)
+  );
+  process.stderr.write("\nPress a key on the Stream Deck.\n");
+
+  rm(ANSWER_FILE);
+  fs.writeFileSync(QUESTION_FILE, JSON.stringify(question, null, 2));
+
+  let answer = null;
+  const deadline = Date.now() + timeoutMs;
+  try {
+    while (Date.now() < deadline) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(ANSWER_FILE, "utf8"));
+        if (parsed.id === question.id) {
+          answer = parsed;
+          break;
+        }
+      } catch {
+        // not answered yet, or caught mid-write
+      }
+      await sleep(POLL_MS);
+    }
+  } finally {
+    rm(QUESTION_FILE); // clears the keys and returns the deck to the previous profile
+    rm(LOCK_FILE);
+  }
+
+  if (!answer) {
+    process.stderr.write("claude-ask: timed out\n");
+    process.exit(3);
+  }
+  process.stdout.write(JSON.stringify(answer) + "\n");
+  process.exit(answer.cancelled ? 2 : 0);
+}
+
+main().catch((err) => {
+  process.stderr.write(`claude-ask: ${err.message}\n`);
+  rm(LOCK_FILE);
+  process.exit(1);
+});

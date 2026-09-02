@@ -1,0 +1,14 @@
+{
+  "name": "hardkoded",
+  "displayName": "hardkoded plugins",
+  "description": "Claude Code plugins by hardkoded",
+  "plugins": [
+    {
+      "name": "streamdeck-claude-answer",
+      "displayName": "Answer Claude on a Stream Deck",
+      "description": "Claude Code puts its multiple-choice questions on your Stream Deck. You answer by pressing a key.",
+      "version": "1.0.0",
+      "source": "."
+    }
+  ]
+}

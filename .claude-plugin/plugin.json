@@ -1,0 +1,14 @@
+{
+  "name": "streamdeck-claude-answer",
+  "displayName": "Answer Claude on a Stream Deck",
+  "version": "1.0.0",
+  "description": "Claude Code puts its multiple-choice questions on your Stream Deck. You answer by pressing a key.",
+  "author": {
+    "name": "Dario Kondratiuk",
+    "url": "https://github.com/hardkoded"
+  },
+  "homepage": "https://github.com/hardkoded/streamdeck-claude-answer",
+  "repository": "https://github.com/hardkoded/streamdeck-claude-answer",
+  "license": "MIT",
+  "keywords": ["streamdeck", "elgato", "hardware", "questions", "input"]
+}

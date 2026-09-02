@@ -1,0 +1,99 @@
+{
+  "Name": "Claude Ask",
+  "Version": "1.6.0.0",
+  "Author": "dario",
+  "Description": "Claude Code asks a question on the Stream Deck. Press a key to answer.",
+  "Category": "Claude",
+  "CategoryIcon": "imgs/category",
+  "Icon": "imgs/category",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.4"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12.0"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20"
+  },
+  "CodePath": "bin/plugin.js",
+  "UUID": "com.claudeask.streamdeck",
+  "Profiles": [
+    {
+      "Name": "Claude Ask",
+      "DeviceType": 0,
+      "Readonly": true,
+      "DontAutoSwitchWhenInstalled": true,
+      "AutoInstall": true
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.claudeask.streamdeck.option",
+      "Name": "Answer Option",
+      "Tooltip": "One answer option. The slot number decides which option it shows.",
+      "Icon": "imgs/action-option",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/action-option",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.claudeask.streamdeck.question",
+      "Name": "Question",
+      "Tooltip": "Shows the question Claude is asking.",
+      "Icon": "imgs/action-question",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/action-question",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.claudeask.streamdeck.cancel",
+      "Name": "Answer in Terminal",
+      "Tooltip": "Skip the deck and answer in the terminal instead.",
+      "Icon": "imgs/action-cancel",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/action-cancel",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.claudeask.streamdeck.context",
+      "Name": "Session Context",
+      "Tooltip": "Shows the directory of the session asking the question.",
+      "Icon": "imgs/action-context",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/action-context",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ]
+}
