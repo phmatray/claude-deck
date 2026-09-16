@@ -1,5 +1,9 @@
 {
   "name": "hardkoded",
+  "owner": {
+    "name": "hardkoded",
+    "url": "https://github.com/hardkoded"
+  },
   "displayName": "hardkoded plugins",
   "description": "Claude Code plugins by hardkoded",
   "plugins": [
