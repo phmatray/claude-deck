@@ -73,13 +73,6 @@ async function killSlot(pid: number, sessionId: string, origin: SessionOrigin): 
   await runSlowTick();
 }
 
-/** Short press: page the deck down the session list, then re-render at once so
- *  the new window (and its slot badge) is the visible confirmation. */
-async function advanceView(): Promise<void> {
-  tracker.advanceView();
-  await runSlowTick();
-}
-
 /** Pushes the current usage snapshot onto whichever usage keys are on the
  *  deck. Reading is mtime-gated in usage.ts, so calling this every tick costs
  *  a stat() in the common case. */
@@ -124,7 +117,7 @@ async function runUsageRefresh(opts: { force?: boolean } = {}): Promise<UsageRef
   return result;
 }
 
-const slotAction = new SlotAction(resetSlot, killSlot, advanceView);
+const slotAction = new SlotAction(resetSlot, killSlot);
 const setupAction = new SetupAction(refreshNow);
 
 const usageActions = [

@@ -17,6 +17,10 @@ export interface SessionEvent {
   notifType?: string;
   /** Present only for PostToolUse[TodoWrite] — snapshot of the new list's statuses. */
   todos?: TodoStatus[];
+  /** Warp pane uuid (`WARP_TERMINAL_SESSION_UUID`) the CLI runs in, when it runs in Warp. */
+  warp?: string;
+  /** `TERM_PROGRAM` of the CLI's terminal (`WarpTerminal`, `vscode`, …). */
+  term?: string;
 }
 
 /** What the icon needs, derived from the event log. */
@@ -42,13 +46,23 @@ export interface DerivedState {
    *  busy flag, which is absent from `<pid>.json` on some entrypoints
    *  (observed on `entrypoint: "sdk-ts"`). */
   busy: boolean;
+  /** Latest Warp pane uuid seen in the log — `warp://session/<uuid>` focuses that exact pane. */
+  warpSession?: string;
+  /** Latest `TERM_PROGRAM` seen in the log. */
+  termProgram?: string;
 }
 
 const ZERO: DerivedState = { awaiting: false, awaitingPermission: false, awaitingQuestion: false, awaitingPlan: false, errored: false, subagentDepth: 0, todos: [], busy: false };
 
 export function reduceEvents(events: readonly SessionEvent[]): DerivedState {
   let state = ZERO;
-  for (const ev of events) state = applyEvent(state, ev);
+  for (const ev of events) {
+    state = applyEvent(state, ev);
+    // Terminal identity rides every line; applied after the switch so the
+    // SessionStart reset can't wipe the value its own line carries.
+    if (ev.warp) state = { ...state, warpSession: ev.warp };
+    if (ev.term) state = { ...state, termProgram: ev.term };
+  }
   return state;
 }
 
@@ -138,6 +152,8 @@ export function parseEventLog(text: string): SessionEvent[] {
           tool: typeof obj.tool === "string" ? obj.tool : undefined,
           notifType: typeof obj.notifType === "string" ? obj.notifType : undefined,
           todos,
+          warp: typeof obj.warp === "string" ? obj.warp : undefined,
+          term: typeof obj.term === "string" ? obj.term : undefined,
         });
       }
     } catch {

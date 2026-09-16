@@ -25,7 +25,7 @@ Each running `claude` CLI session lights up one key on your deck — project nam
 ## Features
 
 - **Live per-session state** — sessions auto-fill the slots in start-time order; excess sessions beyond the slot count are simply not displayed.
-- **Press → page through sessions.** Keys show a window onto the session list, ordered "needs you first, then most recently active" (see [`docs/architecture.md`](docs/architecture.md#slot-ordering)). A press scrolls that window one page down and wraps at the end; the corner badge is the absolute position, so you can tell 3-of-5 from 1-of-5. The view snaps back to the top on its own as soon as a session newly needs your input.
+- **Press → bring that session's terminal to the front.** The hook records the Warp pane each CLI runs in (`WARP_TERMINAL_SESSION_UUID`), so the press opens `warp://session/<uuid>` — the exact pane, even for `claude --worktree` sessions that share a tab cwd, and without Accessibility permission. VS Code sessions get their window. Logs written before the uuid was recorded fall back to the cwd → Warp tab heuristic. Keys are ordered "needs you first, then most recently active" (see [`docs/architecture.md`](docs/architecture.md#slot-ordering)); give the plugin more slots than you run sessions.
 - **Repo and branch on the key** — top line is the repository, bottom line the branch it's checked out on (a short SHA if HEAD is detached); the repo name is truncated with an ellipsis when too long, and a branch that doesn't fit wraps onto two lines instead. Sessions sharing a worktree are told apart by a small top-left suffix badge.
 - **Long-press (≥500 ms) → reset that session's state log** — useful if a stuck `awaiting` lingers.
 - **Plan usage keys** — three optional keys mirror your Claude subscription's rate limits: the 5-hour session window, the weekly all-models window, and whatever per-model weekly buckets the server reports (labelled with the server's own names). Colour steps quietly green → amber → orange → red, and the footer counts down to the reset. Read straight from the usage snapshot Claude Code caches in `~/.claude.json` — no credentials, no network call. The plugin keeps that snapshot fresh by running `claude -p "/usage"` every few minutes (a local slash command, no model turn) since Claude Code otherwise only refetches when something asks to see usage. Press any of them to force a refresh. macOS only.
@@ -39,7 +39,7 @@ Each running `claude` CLI session lights up one key on your deck — project nam
 | **Claude CLI host** | macOS, Linux, WSL, Windows-native — sessions on any of these show up |
 | **Stream Deck app on Linux** | Not supported — Elgato doesn't ship a Linux app |
 | **Node.js** | ≥ 20 (bundled into the plugin runtime by the Stream Deck app) |
-| **Terminal integration** | none — a key press pages the deck instead (the Warp tab focus code is still in `src/warp-*.ts`, unwired) |
+| **Terminal integration** | Warp exact pane via `warp://session/<uuid>` (macOS); VS Code window; cwd → Warp tab fallback |
 | **Plan usage keys** | macOS only — they read the CLI host's `~/.claude.json`, which the Windows-side plugin reaches over a UNC path into a different home |
 
 ## Install

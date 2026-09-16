@@ -8,6 +8,7 @@ import streamDeck, {
   type KeyAction,
 } from "@elgato/streamdeck";
 import type { SessionOrigin } from "./sessions.js";
+import { focusSession, type FocusTarget } from "./warp-focus.js";
 
 /** Hold ≥ this long → wipe just this agent's event log (palier 1). */
 export const LONG_PRESS_MS = 500;
@@ -26,6 +27,11 @@ export interface SlotState {
   pid?: number;
   /** Bound session label, refreshed every tick by the render loop. */
   label?: string;
+  /** Where the bound session runs, same refresh cycle as `label` — what a short press brings to front. */
+  focus?: FocusTarget;
+  /** `focus` captured at KeyDown, pinned like `pressedLabel` so a reorder between
+   *  press and release can't send the focus to another session's terminal. */
+  pressedFocus?: FocusTarget;
   /** Bound session's corner disambiguator, same refresh cycle as `label`. */
   badge?: string;
   /** Label captured at KeyDown. Slots are ordered by recency, so the entry
@@ -58,7 +64,6 @@ export class SlotAction extends SingletonAction {
   constructor(
     private readonly resetSlot: (sessionId: string, origin: SessionOrigin) => Promise<void>,
     private readonly killSlot: (pid: number, sessionId: string, origin: SessionOrigin) => Promise<void>,
-    private readonly advanceView: () => Promise<void>,
   ) {
     super();
   }
@@ -108,6 +113,7 @@ export class SlotAction extends SingletonAction {
     // `label` every tick as the ordering shifts under us.
     slot.pressedLabel = slot.label;
     slot.pressedBadge = slot.badge;
+    slot.pressedFocus = slot.focus;
     // Un agent bg n'est pas killable (daemon partagé) : on garde le palier 1
     // (wipe du log) mais ni l'anneau KILL ni le palier 2.
     const killable = slot.killable === true;
@@ -138,7 +144,7 @@ export class SlotAction extends SingletonAction {
     const wipeTimer = this.pressTimers.get(id);
     const killTimer = this.killTimers.get(id);
     if (wipeTimer) {
-      // Relâché avant 500ms → short press (page la vue). Annule tout.
+      // Relâché avant 500ms → short press (focus Warp). Annule tout.
       clearTimeout(wipeTimer);
       this.pressTimers.delete(id);
       if (killTimer) {
@@ -161,15 +167,19 @@ export class SlotAction extends SingletonAction {
     // Relâché après 3s → kill déjà fired, no-op.
   }
 
-  /** Scrolls the deck one page down the session list. No showOk(): the green
-   *  overlay would sit on top of the very icon that is the confirmation. */
+  /** Brings the session's terminal to the front. No paging on press: on an XL
+   *  the slots outnumber the sessions, and attention-first ordering keeps the
+   *  ones that need you in view.
+   *  ponytail: add a dedicated page key if sessions routinely exceed the slots. */
   private async runShortPress(ev: KeyUpEvent): Promise<void> {
-    try {
-      await this.advanceView();
-    } catch (err) {
-      streamDeck.logger.error("view advance failed", err);
+    const target = this.state.get(ev.action.id)?.pressedFocus;
+    if (!target) {
       await ev.action.showAlert();
+      return;
     }
+    const res = await focusSession(target);
+    streamDeck.logger.info(`focus: ${res.reason} for cwd=${target.cwd}`);
+    if (!res.matched) await ev.action.showAlert();
   }
 
   private async runLongPress(

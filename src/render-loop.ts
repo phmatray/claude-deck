@@ -42,6 +42,7 @@ export async function renderAll(
     if (!slotState) continue;
     slotState.label = label;
     slotState.badge = badge;
+    slotState.focus = entry && { cwd: entry.session.cwd, warpSession: entry.session.warpSession, termProgram: entry.session.termProgram };
     slotState.sessionId = entry?.session.sessionId;
     slotState.origin = entry?.session.origin;
     slotState.pid = entry?.session.pid;

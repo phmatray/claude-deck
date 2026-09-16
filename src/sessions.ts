@@ -109,6 +109,10 @@ export interface SessionInfo {
   busy: boolean;
   /** Snapshot of the last TodoWrite call's statuses; empty if none seen. */
   todos: TodoStatus[];
+  /** Warp pane uuid the CLI runs in (from the hook env), if any. */
+  warpSession?: string;
+  /** `TERM_PROGRAM` of the CLI's terminal, if the hook saw one. */
+  termProgram?: string;
   origin: SessionOrigin;
   /** "interactive" par défaut si le json n'a pas de champ `kind`. */
   kind: "interactive" | "bg";
@@ -265,6 +269,8 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
           subagentActive: derived.subagentDepth > 0,
           busy: derived.busy,
           todos: derived.todos,
+          warpSession: derived.warpSession,
+          termProgram: derived.termProgram,
           origin: src.origin,
         });
       }),

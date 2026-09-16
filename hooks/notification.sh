@@ -63,10 +63,14 @@ jq -nc \
   --arg tool "$TOOL_NAME" \
   --arg notifType "$NOTIF_TYPE" \
   --argjson todos "$TODOS_JSON" \
+  --arg warp "${WARP_TERMINAL_SESSION_UUID:-}" \
+  --arg term "${TERM_PROGRAM:-}" \
   '{ts: $ts, event: $event}
    | (if $tool      != ""   then . + {tool:      $tool}      else . end)
    | (if $notifType != ""   then . + {notifType: $notifType} else . end)
-   | (if $todos     != null then . + {todos:     $todos}     else . end)' \
+   | (if $todos     != null then . + {todos:     $todos}     else . end)
+   | (if $warp      != ""   then . + {warp:      $warp}      else . end)
+   | (if $term      != ""   then . + {term:      $term}      else . end)' \
   >> "$TARGET"
 
 echo '{}'
