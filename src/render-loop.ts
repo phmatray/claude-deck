@@ -28,10 +28,9 @@ export async function renderAll(
     const branch = entry?.session.branch;
     const badge = entry?.session.badge;
     const todos = entry?.session.todos;
-    // Animate the frame when the motif itself animates, OR when an in-progress
-    // todo square needs to pulse (renderTodoColumn reads `frame` for the wave).
-    const animateFrame = isAnimated(state) || (todos && todos.some((s) => s === "in_progress"));
-    const useFrame = animateFrame ? frame : 0;
+    // Only animated states advance the frame (see STATES) — a busy key with an
+    // in-progress todo stays still rather than streaming frames to the deck.
+    const useFrame = isAnimated(state) ? frame : 0;
 
     const svg = entry
       ? renderIcon({ state, slot: slotIndex, label, branch, badge, frame: useFrame, todos })

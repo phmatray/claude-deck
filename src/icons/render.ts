@@ -181,9 +181,8 @@ ${todoColumn}
 /** True when the icon's visual depends on `frame` and must be re-rendered often.
  *  Text never qualifies: labels are truncated, not scrolled, so a static state
  *  with a long name stays genuinely static. */
-export function iconNeedsAnimation(state: SessionState, todos?: readonly TodoStatus[]): boolean {
-  if (STATES[state].animated) return true;
-  return todos !== undefined && todos.some((s) => s === "in_progress");
+export function iconNeedsAnimation(state: SessionState): boolean {
+  return STATES[state].animated;
 }
 
 /** True when the state's motif uses `frame` (motif only — todo pulsing is the

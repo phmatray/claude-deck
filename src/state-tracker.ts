@@ -187,7 +187,7 @@ export function createStateTracker() {
    * rather than scrolled, is most of the time.
    */
   function needsAnimation(): boolean {
-    return visibleEntries.some((e) => iconNeedsAnimation(e.state, e.session.todos));
+    return visibleEntries.some((e) => iconNeedsAnimation(e.state));
   }
 
   return { tick, getEntries, needsAnimation, advanceView };
