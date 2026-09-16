@@ -24,7 +24,7 @@
   "Profiles": [
     {
       "Name": "Claude Ask",
-      "DeviceType": 0,
+      "DeviceType": 2,
       "Readonly": true,
       "DontAutoSwitchWhenInstalled": true,
       "AutoInstall": true

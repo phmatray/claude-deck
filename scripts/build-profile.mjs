@@ -21,7 +21,7 @@ import path from "node:path";
 const PLUGIN_UUID = "com.claudeask.streamdeck";
 const PROFILE_NAME = "Claude Ask";
 const PLUGIN_VERSION = "1.0.0.0";
-const DEVICE_MODEL = "20GBA9901"; // 5x3 Stream Deck / MK.2
+const DEVICE_MODEL = "20GAT9901"; // Stream Deck XL — the 5x3 layout sits in its top-left corner
 const COLUMNS = 5;
 const OPTION_ROWS = [1, 2];
 
