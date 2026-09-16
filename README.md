@@ -95,6 +95,12 @@ Unused option keys go dark. With no question pending the whole page is idle:
 
 ![The idle page](docs/deck-idle.png)
 
+### Permission prompts
+
+The plugin also registers a `PermissionRequest` hook (`hooks/hooks.json` → `bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser**, with the command's first words on the question key and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the [streamdeck-claude](https://github.com/k-ibaraki/streamdeck-claude) session event log, when installed). Read the full command in the terminal before pressing — three words on a key can't tell `git push` from `git push --force`.
+
+Nothing shows with `--dangerously-skip-permissions`, which never asks. There is no "always allow" key, and a prompt that arrives while another question holds the deck stays terminal-only.
+
 ### Stuck deck
 
 If a session is killed hard enough to skip its cleanup, the deck can stay on the ask profile. This releases it:
