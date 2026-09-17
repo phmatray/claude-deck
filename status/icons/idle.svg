@@ -6,22 +6,9 @@
 
 <defs><clipPath id="ct"><rect x="10" y="19" width="124" height="23"/></clipPath></defs>
 <text clip-path="url(#ct)" x="72" y="35" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700" fill="#3b82f6" text-anchor="middle">wolfgangpar…</text>
-<g transform="translate(0,12)"><g transform="translate(42 16) scale(4)">
-<rect x="3" y="15" width="9" height="1" fill="#000" opacity="0.45"/>
-<rect x="3" y="12" width="1" height="3" fill="#DE886D"/>
-<rect x="5" y="12" width="1" height="3" fill="#DE886D"/>
-<rect x="9" y="12" width="1" height="3" fill="#DE886D"/>
-<rect x="11" y="12" width="1" height="3" fill="#DE886D"/>
-<g transform="translate(7.5 13) scale(1 1.000) translate(-7.5 -13)">
-<rect x="2" y="6" width="11" height="7" fill="#DE886D"/>
-<rect x="0" y="9" width="2" height="2" fill="#DE886D"/>
-<rect x="13" y="9" width="2" height="2" fill="#DE886D"/>
-<g transform="translate(7.5 9) scale(1 1) translate(-7.5 -9)">
-<rect x="4" y="8" width="1" height="2" fill="#000"/>
-<rect x="10" y="8" width="1" height="2" fill="#000"/>
-</g>
-</g>
-</g></g>
+<g transform="translate(0,12)"><rect x="44" y="40" width="56" height="40" rx="8" fill="none" stroke="#3b82f6" stroke-width="4"/>
+<path d="M55 51 L64 60 L55 69" fill="none" stroke="#3b82f6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="71" y1="69" x2="88" y2="69" stroke="#3b82f6" stroke-width="4.5" stroke-linecap="round"/></g>
 <defs><clipPath id="cb0"><rect x="10" y="118" width="124" height="20"/></clipPath></defs>
 <text clip-path="url(#cb0)" x="72" y="132" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="600" fill="#bfdbfe" text-anchor="middle">main</text>
 

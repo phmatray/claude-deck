@@ -1,9 +1,9 @@
 import {
   awaitingPulse,
-  clawdIdleLook,
   emptyDashed,
   errorBolt,
   finishedCheck,
+  idlePrompt,
   permissionPulse,
   planPulse,
   questionPulse,
@@ -33,7 +33,7 @@ interface StateDef {
 export const STATES = {
   working:       { palette: { bg: "#0f1115", accent: "#fbbf24", label: "#fde68a" }, animated: false,  pulseBg: false, motif: spinnerArc },
   subagent:      { palette: { bg: "#0f1115", accent: "#fbbf24", label: "#fde68a" }, animated: false,  pulseBg: false, motif: subagentBranch },
-  idle:          { palette: { bg: "#0f1115", accent: "#3b82f6", label: "#bfdbfe" }, animated: false,  pulseBg: false, motif: clawdIdleLook },
+  idle:          { palette: { bg: "#0f1115", accent: "#3b82f6", label: "#bfdbfe" }, animated: false,  pulseBg: false, motif: idlePrompt },
   awaiting:            { palette: { bg: "#1a1208", accent: "#f97316", label: "#fed7aa" }, animated: true,  pulseBg: true,  motif: awaitingPulse },
   awaiting_permission: { palette: { bg: "#1a1308", accent: "#f59e0b", label: "#fde68a" }, animated: true,  pulseBg: true,  motif: permissionPulse },
   awaiting_question:   { palette: { bg: "#08191c", accent: "#06b6d4", label: "#a5f3fc" }, animated: true,  pulseBg: true,  motif: questionPulse },
@@ -44,7 +44,7 @@ export const STATES = {
   // bg_awaiting* partagent la même palette à dessein : états bg basse priorité, le motif seul les distingue.
   bg_awaiting_permission: { palette: { bg: "#12132e", accent: "#a5b4fc", label: "#ddd6fe" }, animated: true,  pulseBg: true,  motif: permissionPulse },
   bg_awaiting:            { palette: { bg: "#12132e", accent: "#a5b4fc", label: "#ddd6fe" }, animated: true,  pulseBg: true,  motif: awaitingPulse },
-  bg_idle:                { palette: { bg: "#10131a", accent: "#6b7fd0", label: "#c7d2fe" }, animated: false,  pulseBg: false, motif: clawdIdleLook },
+  bg_idle:                { palette: { bg: "#10131a", accent: "#6b7fd0", label: "#c7d2fe" }, animated: false,  pulseBg: false, motif: idlePrompt },
   empty:         { palette: { bg: "#0a0b0e", accent: "#374151", label: "#4b5563" }, animated: false, pulseBg: false, motif: emptyDashed },
 } satisfies Record<string, StateDef>;
 

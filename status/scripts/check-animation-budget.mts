@@ -9,4 +9,11 @@ assert.deepEqual(animated, [
   "awaiting", "awaiting_permission", "awaiting_plan", "awaiting_question",
   "bg_awaiting", "bg_awaiting_permission", "error",
 ]);
+
+// Idle is a static, pure line-art motif drawn in the state's accent.
+for (const def of [STATES.idle, STATES.bg_idle]) {
+  const svg = def.motif(0, "#123456");
+  assert.equal(def.motif(7, "#123456"), svg, "idle motif ignores the frame");
+  assert.ok(svg.includes("#123456") && !/#de886d/i.test(svg), "idle motif uses the accent colour");
+}
 console.log("ok: animation budget");

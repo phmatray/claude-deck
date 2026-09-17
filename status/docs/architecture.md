@@ -141,8 +141,7 @@ The Windows hook is **not copied** — `scripts/install-hook.sh --target=windows
 │   ├── manifest.json
 │   ├── bin/plugin.js                     # built bundle
 │   ├── imgs/                             # static manifest icons
-│   ├── ui/                               # property inspector HTML
-│   └── assets/clawd/                     # AGPL-3.0 mascot SVGs (see NOTICE.md)
+│   └── ui/                               # property inspector HTML
 ├── src/
 │   ├── plugin.ts                         # entry, polling loop
 │   ├── slot-action.ts                    # per-slot SingletonAction
