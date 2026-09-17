@@ -1,0 +1,124 @@
+import streamDeck from "@elgato/streamdeck";
+import { describeTopPanes, pickBestPane, readWarpPanes } from "./warp-db.js";
+import type { WarpFocusResult } from "./warp-focus.js";
+import { spawnCapture } from "./spawn-capture.js";
+
+/**
+ * Best-effort focus of the Warp tab corresponding to `cwd` on macOS.
+ *
+ * Warp exposes no AX content (its UI tree is empty to System Events) and no
+ * AppleScript dictionary (warpdotdev/Warp#3364). Workaround: read Warp's local
+ * sqlite DB to map cwd → (window_id, tab_index), then activate Warp and send
+ * `Cmd+<tabIndex+1>` as a keystroke (System Events keystroke works even when
+ * the target app has no AX content).
+ *
+ * Requires Stream Deck.app to be granted Accessibility (for the keystroke) in
+ * System Settings → Privacy & Security → Accessibility. macOS prompts on the
+ * first call.
+ */
+export async function focusWarpTabOnMac(cwd: string): Promise<WarpFocusResult> {
+  const open = await activateWarp();
+  if (!open.ok) return { matched: false, reason: `activate-failed: ${open.error}` };
+
+  const db = await readWarpPanes();
+  if (!db.ok) return { matched: false, reason: `db-read-failed: ${db.error}` };
+  if (db.snapshot.panes.length === 0) return { matched: false, reason: "db-empty" };
+
+  const best = pickBestPane(cwd, db.snapshot.panes);
+  if (!best) {
+    const top = describeTopPanes(cwd, db.snapshot.panes);
+    return { matched: false, reason: `no-match (rows=${db.snapshot.panes.length}, top=[${top}])` };
+  }
+
+  // Multi-window: we can't reliably target a specific Warp window since AX is
+  // empty (no per-window raise). The keystroke goes to whichever Warp window
+  // is frontmost — user can Cmd+\` to cycle windows if it lands wrong.
+  const windowCount = new Set(db.snapshot.panes.map((r) => r.windowId)).size;
+  if (windowCount > 1) {
+    streamDeck.logger.info(`warp: ${windowCount} windows in DB — keystroke goes to frontmost only`);
+  }
+
+  // Tabs 1..9 have direct Cmd+<digit> shortcuts; beyond that we fall back to
+  // Cmd+Option+→/← cycling, computing the shortest path from the currently
+  // active tab in the target window.
+  if (best.tabIndex <= 8) {
+    const digit = String(best.tabIndex + 1);
+    const sent = await sendKeystrokeToWarp({ kind: "cmd-digit", digit });
+    if (!sent.ok) return { matched: false, reason: `keystroke-failed: ${sent.error}` };
+    return { matched: true, reason: `Cmd+${digit} → window=${best.windowId} tab=${best.tabIndex} score=${best.score} pane="${best.paneCwd}"` };
+  }
+
+  const active = db.snapshot.activeTabByWindow.get(best.windowId);
+  const total = db.snapshot.tabCountByWindow.get(best.windowId);
+  if (active === undefined || total === undefined || total <= 0) {
+    return { matched: false, reason: `cycle-needs-active+total (window=${best.windowId} active=${active} total=${total})` };
+  }
+  const { direction, steps } = shortestCycle(active, best.tabIndex, total);
+  if (steps === 0) {
+    return { matched: true, reason: `already-on-tab window=${best.windowId} tab=${best.tabIndex}` };
+  }
+  const sent = await sendKeystrokeToWarp({ kind: "cycle", direction, steps });
+  if (!sent.ok) return { matched: false, reason: `cycle-keystroke-failed: ${sent.error}` };
+  return { matched: true, reason: `cycle ${direction} x${steps} → window=${best.windowId} tab=${best.tabIndex} (from ${active}/${total}) pane="${best.paneCwd}"` };
+}
+
+/** Pick the shorter direction around a circular tab strip of `total` tabs. */
+function shortestCycle(
+  from: number,
+  to: number,
+  total: number,
+): { direction: "next" | "prev"; steps: number } {
+  if (total <= 0 || from === to) return { direction: "next", steps: 0 };
+  const forward = (to - from + total) % total;
+  const backward = (from - to + total) % total;
+  return forward <= backward
+    ? { direction: "next", steps: forward }
+    : { direction: "prev", steps: backward };
+}
+
+async function activateWarp(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const r = await spawnCapture("/usr/bin/open", ["-a", "Warp"]);
+  if (r.err) return { ok: false, error: r.err };
+  if (r.code !== 0) return { ok: false, error: r.stderr.trim() || `exit-${r.code}` };
+  return { ok: true };
+}
+
+type KeystrokeSpec =
+  | { kind: "cmd-digit"; digit: string }
+  | { kind: "cycle"; direction: "next" | "prev"; steps: number };
+
+async function sendKeystrokeToWarp(spec: KeystrokeSpec): Promise<{ ok: true } | { ok: false; error: string }> {
+  // arrow key codes: 123 = ←, 124 = →
+  const body = spec.kind === "cmd-digit"
+    ? `keystroke "${spec.digit}" using command down`
+    : `repeat ${spec.steps} times
+         key code ${spec.direction === "next" ? 124 : 123} using {command down, option down}
+         delay 0.02
+       end repeat`;
+
+  // Brief delay so Warp is fully frontmost before the key reaches it.
+  const script = `
+    delay 0.1
+    tell application "System Events"
+      if not (exists process "Warp") then return "ERROR: warp-not-running"
+      tell process "Warp" to set frontmost to true
+      ${body}
+      return "OK"
+    end tell
+  `;
+  // Cycling N tabs needs ~(steps*20ms + 100ms) + osascript startup. Give it
+  // headroom proportional to step count.
+  const timeoutMs = 1500 + (spec.kind === "cycle" ? spec.steps * 25 : 0);
+  const r = await runOsa(script, timeoutMs);
+  if (!r.ok) return { ok: false, error: r.error };
+  if (r.out === "OK") return { ok: true };
+  return { ok: false, error: r.out };
+}
+
+async function runOsa(script: string, timeoutMs: number): Promise<{ ok: true; out: string } | { ok: false; error: string }> {
+  const r = await spawnCapture("/usr/bin/osascript", ["-e", script], { timeoutMs });
+  if (r.timedOut) return { ok: false, error: "timeout" };
+  if (r.err) return { ok: false, error: `spawn: ${r.err}` };
+  if (r.code !== 0) return { ok: false, error: r.stderr.trim() || `exit-${r.code}` };
+  return { ok: true, out: r.stdout.trim() };
+}

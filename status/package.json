@@ -1,0 +1,40 @@
+{
+  "name": "streamdeck-claude",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "description": "Stream Deck plugin showing live Claude Code CLI session states",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w --watch.onEnd=\"bash scripts/reload-plugin.sh\"",
+    "icons:render": "tsx scripts/render-icons.mjs",
+    "icons:static": "node scripts/render-static-pngs.mjs",
+    "install:hook": "bash scripts/install-hook.sh",
+    "install:hook:windows": "bash scripts/install-hook.sh --target=windows",
+    "check:hooks": "bash scripts/check-hooks.sh",
+    "sd:link": "bash scripts/link-plugin.sh",
+    "sd:unlink": "bash scripts/unlink-plugin.sh",
+    "sd:validate": "bash scripts/sd-cli.sh validate com.julien.claudesessions.sdPlugin",
+    "sd:pack": "bash scripts/sd-cli.sh pack com.julien.claudesessions.sdPlugin --output dist/",
+    "sd:dev": "bash scripts/sd-cli.sh dev",
+    "sd:reload": "bash scripts/reload-plugin.sh",
+    "drill": "tsx scripts/drill-states.ts"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.7.4",
+    "@resvg/resvg-js": "^2.6.2",
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-node-resolve": "^15.2.2",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@tsconfig/node20": "^20.1.2",
+    "@types/node": "~20.15.0",
+    "rollup": "^4.0.2",
+    "tslib": "^2.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^1.0.0"
+  }
+}

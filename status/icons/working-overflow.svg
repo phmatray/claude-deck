@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">
+<rect width="144" height="144" fill="#0f1115"/>
+
+<rect x="5" y="5" width="134" height="134" rx="20" fill="none" stroke="#fbbf24" stroke-width="5" stroke-linejoin="round" opacity="0.95"/>
+<text x="128" y="19" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="700" fill="#fbbf24" opacity="0.8" text-anchor="end">1</text>
+
+<defs><clipPath id="ct"><rect x="10" y="19" width="124" height="23"/></clipPath></defs>
+<text clip-path="url(#ct)" x="72" y="35" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700" fill="#fbbf24" text-anchor="middle">very-long-s…</text>
+<g transform="translate(0,12) translate(72,60) scale(0.77) translate(-72,-60)"><path d="M 72.00 38.00 A 22 22 0 1 1 52.95 71.00" fill="none" stroke="#fbbf24" stroke-width="6" stroke-linecap="round"/></g>
+<defs><clipPath id="cb0"><rect x="10" y="101" width="124" height="18"/></clipPath></defs>
+<text clip-path="url(#cb0)" x="72" y="114" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="15" font-weight="600" fill="#fde68a" text-anchor="middle">feat/sort-by-</text><defs><clipPath id="cb1"><rect x="10" y="119" width="124" height="18"/></clipPath></defs>
+<text clip-path="url(#cb1)" x="72" y="132" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="15" font-weight="600" fill="#fde68a" text-anchor="middle">last-activity</text>
+
+</svg>

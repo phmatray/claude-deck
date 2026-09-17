@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <!-- Action picker icon: three stacked usage gauges at increasing fill. -->
+  <rect width="40" height="40" fill="#0f1115"/>
+  <g>
+    <rect x="7" y="11" width="26" height="5" rx="2.5" fill="#1f2430"/>
+    <rect x="7" y="11" width="8"  height="5" rx="2.5" fill="#22c55e"/>
+    <rect x="7" y="18" width="26" height="5" rx="2.5" fill="#1f2430"/>
+    <rect x="7" y="18" width="16" height="5" rx="2.5" fill="#fbbf24"/>
+    <rect x="7" y="25" width="26" height="5" rx="2.5" fill="#1f2430"/>
+    <rect x="7" y="25" width="23" height="5" rx="2.5" fill="#ef4444"/>
+  </g>
+</svg>
