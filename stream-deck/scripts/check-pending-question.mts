@@ -68,7 +68,13 @@ const bg = { ...errored, errored: false, kind: "bg" as const, bgStatus: "running
 assert.equal(deriveState(bg, true), "bg_awaiting_permission");
 assert.equal(deriveState({ ...bg, pendingQuestion: { id: "q", kind: "ask" as const } }, true), "bg_awaiting");
 assert.equal(deriveState({ ...bg, pendingQuestion: undefined }, true), "bg_working");
-await tracker.tick(1);
+// Only the head of the list reaches the keys, numbered from 1 — that number is the
+// corner badge, the only feedback that a short press landed on the session you meant.
+assert.deepEqual(
+  (await tracker.tick(1)).map((e) => [e.session.sessionId, e.slotNumber]),
+  [["new", 1]],
+  "one key, one entry, slot 1",
+);
 assert.equal(tracker.findSession("old")?.cwd, join(home, "old"), "found even when scrolled off the keys");
 
 // the deck badge: a 14x10 key at the badge position, the b7 badge pushed after it

@@ -20,8 +20,8 @@ export async function renderAll(
   for (let i = 0; i < ordered.length; i++) {
     const action = ordered[i];
     const entry = entries[i];
-    // Absolute position in the full session list, carried on the entry so the
-    // slow tick and the animation tick can't disagree about the badge.
+    // Key position, 1-based, carried on the entry so the slow tick and the
+    // animation tick can't disagree about the badge.
     const slotIndex = entry?.slotNumber ?? i + 1;
     const state = entry?.state ?? "empty";
     const label = entry?.session.label ?? "";
