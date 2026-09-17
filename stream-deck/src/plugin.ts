@@ -135,12 +135,17 @@ const usageActions = [
 ];
 
 const askKeys = {
-  context: new AskContextAction(),
+  // The session as the dashboard names it; the badge is all that tells apart two sessions in one repo.
+  context: new AskContextAction((sessionId) => {
+    const s = tracker.findSession(sessionId);
+    return s?.badge ? `${s.label}-${s.badge}` : s?.label;
+  }),
   header: new AskHeaderAction(),
   option: new AskOptionAction(),
   queue: new AskQueueAction(),
   back: new AskBackAction(),
   terminal: new AskTerminalAction(),
+  detail: new AskDetailAction(),
 };
 
 // Every manifest action, in manifest order. Keep this list and the manifest's
@@ -152,7 +157,7 @@ for (const a of [
   new LauncherAction(),
   askKeys.context,
   askKeys.header,
-  new AskDetailAction(),
+  askKeys.detail,
   askKeys.option,
   askKeys.queue,
   askKeys.back,

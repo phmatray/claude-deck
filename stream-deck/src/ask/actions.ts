@@ -1,16 +1,19 @@
 import streamDeck, {
   action,
   SingletonAction,
+  type Coordinates,
   type KeyAction,
   type KeyDownEvent,
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import { ask } from "./ask.js";
+import { detailLines, KEYS_PER_ROW, segmentLines } from "./detail.js";
 import type { Question } from "./queue.js";
 import * as render from "./render.js";
 
-type AskSettings = { slot?: number };
+/** Set by the bundled profile: `slot` on option keys, `segment` on detail keys. */
+type AskSettings = { slot?: number; segment?: number };
 
 /** A key on the answer profile, painted from the pending question. */
 abstract class AskKey extends SingletonAction<AskSettings> {
@@ -18,11 +21,14 @@ abstract class AskKey extends SingletonAction<AskSettings> {
 
   protected abstract image(question: Question | null, slot: number): string;
 
+  /** The key's option slot. The bundled profile sets it; the fallback assumes its single option row. */
+  protected slotFrom(settings: AskSettings, at?: Coordinates): number {
+    return typeof settings.slot === "number" ? settings.slot : (at?.column ?? 0);
+  }
+
   override onWillAppear(ev: WillAppearEvent<AskSettings>): Promise<void> | void {
     if (!ev.action.isKey()) return;
-    const c = ev.action.coordinates;
-    // The bundled profile sets `slot`; the fallback assumes its single option row.
-    const slot = typeof ev.payload.settings.slot === "number" ? ev.payload.settings.slot : (c?.column ?? 0);
+    const slot = this.slotFrom(ev.payload.settings, ev.action.coordinates);
     const key = { action: ev.action, slot };
     this.keys.set(ev.action.id, key);
     return this.paint(key.action, slot);
@@ -63,15 +69,34 @@ abstract class AskKey extends SingletonAction<AskSettings> {
 
 @action({ UUID: "com.phmatray.claudedeck.ask.context" })
 export class AskContextAction extends AskKey {
+  /** `sessionLabel`: the dashboard's name for a session, when it knows the session. */
+  constructor(private readonly sessionLabel: (sessionId: string) => string | undefined) {
+    super();
+  }
+
   protected image(q: Question | null): string {
-    return q?.context ? render.contextKey(q.context) : render.idleContextKey();
+    if (!q?.context) return render.idleContextKey();
+    const label = q.sessionId ? this.sessionLabel(q.sessionId) : undefined;
+    return render.contextKey(q.context, label === q.context ? undefined : label);
   }
 }
 
 @action({ UUID: "com.phmatray.claudedeck.ask.header" })
 export class AskHeaderAction extends AskKey {
   protected image(q: Question | null): string {
-    return q ? render.questionKey(q.header || "Question") : render.idleQuestionKey();
+    return q ? render.questionKey(q.header || "Question", q.kind) : render.idleQuestionKey();
+  }
+}
+
+@action({ UUID: "com.phmatray.claudedeck.ask.detail" })
+export class AskDetailAction extends AskKey {
+  /** Detail keys are numbered by `segment` (0-7 row 1, 8-15 row 2) in `slot`'s place. */
+  protected override slotFrom(settings: AskSettings, at?: Coordinates): number {
+    return typeof settings.segment === "number" ? settings.segment : at ? (at.row - 1) * KEYS_PER_ROW + at.column : 0;
+  }
+
+  protected image(q: Question | null, segment: number): string {
+    return render.detailKey(q ? segmentLines(detailLines(q.detail ?? q.question ?? ""), segment) : []);
   }
 }
 
@@ -121,10 +146,3 @@ export class AskBackAction extends AskKey {
     await this.press(ev, () => ask.pressBack(ev.action.device.id));
   }
 }
-
-// Declared now so the manifest action list and the registration order in
-// plugin.ts never change again; it shows its manifest image until the XL
-// answer layout gives it content.
-
-@action({ UUID: "com.phmatray.claudedeck.ask.detail" })
-export class AskDetailAction extends SingletonAction {}

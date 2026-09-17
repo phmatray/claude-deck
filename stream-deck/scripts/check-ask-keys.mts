@@ -21,7 +21,7 @@ process.chdir(tmp);
 
 const streamDeck = (await import("@elgato/streamdeck")).default;
 const { ask, pendingQuestion, startAsk } = await import("../src/ask/ask.ts");
-const { AskBackAction, AskOptionAction, AskQueueAction, AskTerminalAction } = await import("../src/ask/actions.ts");
+const { AskBackAction, AskDetailAction, AskOptionAction, AskQueueAction, AskTerminalAction } = await import("../src/ask/actions.ts");
 const { createQueue, parseQuestion } = await import("../src/ask/queue.ts");
 // The SDK only logs uncaught exceptions, and the watcher keeps the loop alive: fail loudly.
 process.on("uncaughtException", (err) => {
@@ -66,9 +66,9 @@ const answerOf = (id: string) => {
   assert.equal(typeof a.answeredAt, "string");
   return { ...a, answeredAt: undefined };
 };
-const key = (id: string, slot: number) => {
+const key = (id: string, slot: number, settings: object = { slot }) => {
   const action = { id, device: { id: "xl" }, isKey: () => true, coordinates: { column: slot, row: 3 }, setImage: async (img: string) => void images.set(id, img), showAlert: async () => {} };
-  return { action, payload: { settings: { slot } } } as any;
+  return { action, payload: { settings } } as any;
 };
 const images = new Map<string, string>();
 const svg = (id: string) => Buffer.from(images.get(id)!.replace(/^data:image\/svg\+xml;base64,/, ""), "base64").toString("utf8");
@@ -135,7 +135,7 @@ writeFileSync(join(ANSWERS, "orphan.json"), "{}"); // answered after its claude-
 // answered, its claude-ask not done reading it (dead pid only keeps it off the keys here)
 put(question("live", { pid: deadPid }));
 writeFileSync(join(ANSWERS, "live.json"), "{}");
-put(question("q1"));
+put(question("q1", { detail: "git push --force origin main" }));
 const focused: string[] = [];
 startAsk(() => {}, (q) => focused.push(q.id));
 for (const f of ["question.json", "answer.json", "lock"]) assert.ok(!existsSync(join(askDir, f)), `legacy ${f} removed`);
@@ -160,6 +160,16 @@ const queueKey = new AskQueueAction();
 queueKey.onWillAppear(key("queue", 0));
 await until("queue key painted", () => images.has("queue"));
 assert.match(svg("queue"), />\+1<\/text>/);
+
+// detail keys: each paints its own columns of the question's detail (segment from settings, not position)
+const detail = new AskDetailAction();
+detail.onWillAppear(key("detail0", 5, { segment: 0 }));
+detail.onWillAppear(key("detail1", 5, { segment: 1 }));
+detail.onWillAppear(key("detail8", 5, { segment: 8 }));
+await until("detail keys painted", () => ["detail0", "detail1", "detail8"].every((k) => images.has(k)));
+assert.match(svg("detail0"), />git\u00A0push\u00A0--fo<\/text>/);
+assert.match(svg("detail1"), />rce\u00A0origin\u00A0ma<\/text>/);
+assert.ok(!svg("detail8").includes("<text"), "row 2: nothing left to show");
 
 // option key: the answer names the option by id; the next question comes up, no switch
 const option = new AskOptionAction();

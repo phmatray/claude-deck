@@ -1,5 +1,8 @@
 /** Key art for the answer keys, as base64 SVG data URLs for `setImage`. */
 
+import { DETAIL_FONT_SIZE, DETAIL_PAD_X, LINES_PER_KEY } from "./detail.js";
+import type { QuestionKind } from "./queue.js";
+
 const FONT = "Helvetica, Arial, sans-serif";
 const SIZE = 144;
 const ACCENT = "#63A4FF";
@@ -90,12 +93,15 @@ function block(text: string, { boxW, boxH, centerY, color, maxLines = 3, sizes =
     .join("");
 }
 
-function key(bg: string, stroke: string, inner: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">` +
-    `<rect x="1.5" y="1.5" width="${SIZE - 3}" height="${SIZE - 3}" rx="14" fill="${bg}" stroke="${stroke}" stroke-width="3"/>` +
-    inner + `</svg>`;
+function svgUrl(inner: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">${inner}</svg>`;
   return "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
+}
+
+function key(bg: string, stroke: string, inner: string): string {
+  return svgUrl(
+    `<rect x="1.5" y="1.5" width="${SIZE - 3}" height="${SIZE - 3}" rx="14" fill="${bg}" stroke="${stroke}" stroke-width="3"/>` + inner,
+  );
 }
 
 export function optionKey(number: number, label: string): string {
@@ -104,9 +110,14 @@ export function optionKey(number: number, label: string): string {
   return key("#111820", "#43536B", badge + body);
 }
 
-export function contextKey(label: string): string {
-  const body = block(label, { boxW: 124, boxH: 84, centerY: 96, color: "#EAFFF8", maxLines: 2 });
+/** The project, and below it the dashboard's name for the session when that adds
+ *  something (two sessions in one repo differ only there). */
+export function contextKey(project: string, session?: string): string {
   const tag = `<text x="12" y="34" font-family="${FONT}" font-size="24" font-weight="bold" fill="#63D7B0">~/</text>`;
+  const body = session
+    ? block(project, { boxW: 124, boxH: 56, centerY: 76, color: "#EAFFF8", maxLines: 2, sizes: LABEL_SIZES.slice(4) }) +
+      block(session, { boxW: 124, boxH: 24, centerY: 120, color: "#63D7B0", maxLines: 1, sizes: [22, 20, 18, 16] })
+    : block(project, { boxW: 124, boxH: 84, centerY: 96, color: "#EAFFF8", maxLines: 2 });
   return key("#16232B", "#3E7F73", tag + body);
 }
 
@@ -118,9 +129,35 @@ export function emptyKey(): string {
   return key("#080B10", "#151C26", "");
 }
 
-export function questionKey(text: string): string {
+/** Header key colours: which kind of question is up shows before any text is read. */
+const KIND_COLORS: Record<QuestionKind, { bg: string; stroke: string }> = {
+  permission: { bg: "#3A2708", stroke: "#F2A93B" },
+  plan: { bg: "#2A1848", stroke: "#A77BFF" },
+  ask: { bg: "#0E2545", stroke: ACCENT },
+};
+
+export function questionKey(text: string, kind: QuestionKind = "ask"): string {
   const body = block(text, { boxW: 124, boxH: 118, centerY: 74, color: "#FFFFFF" });
-  return key("#0E2545", ACCENT, body);
+  const { bg, stroke } = KIND_COLORS[kind] ?? KIND_COLORS.ask;
+  return key(bg, stroke, body);
+}
+
+const DETAIL_FONT = "ui-monospace, Menlo, monospace";
+const DETAIL_LINE_HEIGHT = 23;
+
+/** One key of the detail strip: its slice of the lines (detail.ts), monospace, left
+ *  aligned at the same x on every key so columns continue across the row. No frame,
+ *  so the sixteen keys read as one surface; with no text it is just that surface. */
+export function detailKey(lines: string[]): string {
+  const text = lines
+    .slice(0, LINES_PER_KEY)
+    .map((l, i) =>
+      l.trim()
+        ? `<text x="${DETAIL_PAD_X}" y="${DETAIL_FONT_SIZE + i * DETAIL_LINE_HEIGHT}" font-family="${DETAIL_FONT}" font-size="${DETAIL_FONT_SIZE}" fill="#D6DEE8">${esc(l)}</text>`
+        : "",
+    )
+    .join("");
+  return svgUrl(`<rect width="${SIZE}" height="${SIZE}" fill="#05080C"/>` + text);
 }
 
 export function idleQuestionKey(): string {
