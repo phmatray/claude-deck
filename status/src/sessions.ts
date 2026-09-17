@@ -2,7 +2,7 @@ import { readdir, readFile, stat, unlink } from "node:fs/promises";
 import { basename, join } from "node:path";
 import streamDeck from "@elgato/streamdeck";
 import type { SessionState } from "./icons/index.js";
-import { LEGACY_USAGE_REFRESH_DIR, SESSIONS_DIR, USAGE_REFRESH_DIR } from "./env.js";
+import { isUsageRefreshCwd, SESSIONS_DIR } from "./env.js";
 import { pruneGitCache, readGitInfo } from "./git-info.js";
 import { parseEventLog, reduceEvents, type DerivedState, type TodoStatus } from "./session-events.js";
 
@@ -151,7 +151,7 @@ async function readSessionFiles(): Promise<SessionInfo[]> {
         // other CLI session. It lives for ~3s and would sort to the top of the
         // non-attention group (its lastActivityAt is "now"), shoving every
         // other key down a slot. Its dedicated cwd is how we recognise it.
-        if (raw.cwd === USAGE_REFRESH_DIR || raw.cwd === LEGACY_USAGE_REFRESH_DIR) return;
+        if (isUsageRefreshCwd(raw.cwd)) return;
 
         const status = raw.status === "busy" ? "busy" : "idle";
         const kind: "interactive" | "bg" = raw.kind === "bg" ? "bg" : "interactive";

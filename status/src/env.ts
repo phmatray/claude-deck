@@ -33,6 +33,12 @@ export const USAGE_REFRESH_DIR = join(HOME, ".claude", ".claude-deck-usage");
  *  ponytail: drop one release after 3.0. */
 export const LEGACY_USAGE_REFRESH_DIR = join(HOME, ".claude", ".streamdeck-usage");
 
+/** True for the refresher's transient session, which `sessions.ts` hides.
+ *  Kept here, away from the SDK import, so a check can pin both cwds. */
+export function isUsageRefreshCwd(cwd: string): boolean {
+  return cwd === USAGE_REFRESH_DIR || cwd === LEGACY_USAGE_REFRESH_DIR;
+}
+
 /** Directories prepended to PATH before the plugin spawns the `claude` CLI.
  *
  *  The Stream Deck app is started by launchd, which hands its children the

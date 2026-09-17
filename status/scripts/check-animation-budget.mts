@@ -22,6 +22,9 @@ for (const def of [STATES.idle, STATES.bg_idle]) {
   const [x, y, w, h] = (svg.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/) ?? []).slice(1).map(Number);
   assert.deepEqual([x + w / 2, y + h / 2], [72, 60], "prompt window centred on (72,60)");
   assert.ok(y >= 25 && y + h <= 95, "prompt window within y 25..95");
+  assert.match(svg, /<rect [^>]*fill="none"[^>]*stroke="#123456"/, "prompt window is an unfilled outline in the accent");
+  assert.match(svg, /<path [^>]*stroke="#123456"/, "chevron drawn in the accent");
+  assert.match(svg, /<line [^>]*stroke="#123456"/, "cursor drawn in the accent");
 }
 Date.now = realNow;
 console.log("ok: animation budget");
