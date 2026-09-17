@@ -6,7 +6,8 @@ import streamDeck, {
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
-import { answer, currentQuestion, type Answer, type Question } from "./ask.js";
+import { ask } from "./ask.js";
+import type { Question } from "./queue.js";
 import * as render from "./render.js";
 
 type AskSettings = { slot?: number };
@@ -39,12 +40,12 @@ abstract class AskKey extends SingletonAction<AskSettings> {
     return this.keys.get(id)?.slot;
   }
 
-  /** Answers and acknowledges failure on the key: a lost answer leaves `claude-ask` waiting. */
-  protected async send(ev: KeyDownEvent<AskSettings>, a: Answer): Promise<void> {
+  /** Runs a press and acknowledges failure on the key: a lost answer leaves `claude-ask` waiting. */
+  protected async press(ev: KeyDownEvent<AskSettings>, run: () => void): Promise<void> {
     try {
-      answer(a);
+      run();
     } catch (err) {
-      streamDeck.logger.error("ask: writing the answer failed", err);
+      streamDeck.logger.error("ask: key press failed", err);
       await ev.action.showAlert();
     }
   }
@@ -53,7 +54,7 @@ abstract class AskKey extends SingletonAction<AskSettings> {
    *  takes down the whole plugin, session dashboard included. */
   private async paint(key: KeyAction<AskSettings>, slot: number): Promise<void> {
     try {
-      await key.setImage(this.image(currentQuestion(), slot));
+      await key.setImage(this.image(ask.active(), slot));
     } catch (err) {
       streamDeck.logger.warn(`ask: paint failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -83,8 +84,7 @@ export class AskOptionAction extends AskKey {
 
   override async onKeyDown(ev: KeyDownEvent<AskSettings>): Promise<void> {
     const slot = this.slotOf(ev.action.id);
-    const option = slot === undefined ? undefined : currentQuestion()?.options?.[slot];
-    if (slot !== undefined && option) await this.send(ev, { index: slot, label: option.label, cancelled: false });
+    if (slot !== undefined) await this.press(ev, () => ask.pressOption(slot));
   }
 }
 
@@ -95,19 +95,36 @@ export class AskTerminalAction extends AskKey {
   }
 
   override async onKeyDown(ev: KeyDownEvent<AskSettings>): Promise<void> {
-    if (currentQuestion()) await this.send(ev, { cancelled: true });
+    await this.press(ev, () => ask.pressTerminal());
+  }
+}
+
+@action({ UUID: "com.phmatray.claudedeck.ask.queue" })
+export class AskQueueAction extends AskKey {
+  protected image(): string {
+    const others = ask.othersCount();
+    return others > 0 ? render.queueKey(others) : render.emptyKey();
+  }
+
+  override async onKeyDown(ev: KeyDownEvent<AskSettings>): Promise<void> {
+    await this.press(ev, () => ask.pressQueue());
+  }
+}
+
+@action({ UUID: "com.phmatray.claudedeck.ask.back" })
+export class AskBackAction extends AskKey {
+  protected image(): string {
+    return render.backKey();
+  }
+
+  override async onKeyDown(ev: KeyDownEvent<AskSettings>): Promise<void> {
+    await this.press(ev, () => ask.pressBack());
   }
 }
 
 // Declared now so the manifest action list and the registration order in
-// plugin.ts never change again; they show their manifest image until the
-// XL answer layout gives them content.
+// plugin.ts never change again; it shows its manifest image until the XL
+// answer layout gives it content.
 
 @action({ UUID: "com.phmatray.claudedeck.ask.detail" })
 export class AskDetailAction extends SingletonAction {}
-
-@action({ UUID: "com.phmatray.claudedeck.ask.queue" })
-export class AskQueueAction extends SingletonAction {}
-
-@action({ UUID: "com.phmatray.claudedeck.ask.back" })
-export class AskBackAction extends SingletonAction {}

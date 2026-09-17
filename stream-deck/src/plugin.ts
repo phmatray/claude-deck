@@ -25,14 +25,15 @@ import {
   AskQueueAction,
   AskTerminalAction,
 } from "./ask/actions.js";
-import { startAsk } from "./ask/ask.js";
+import { ask, pendingQuestion, startAsk } from "./ask/ask.js";
+import { focusSession } from "./warp-focus.js";
 
 streamDeck.logger.setLevel(LogLevel.DEBUG);
 
 const POLL_MS = 1000;
 const ANIMATION_MS = 120;
 
-const tracker = createStateTracker();
+const tracker = createStateTracker(pendingQuestion);
 let frame = 0;
 let slowTickRunning = false;
 
@@ -124,7 +125,7 @@ async function runUsageRefresh(opts: { force?: boolean } = {}): Promise<UsageRef
   return result;
 }
 
-const slotAction = new SlotAction(resetSlot, killSlot);
+const slotAction = new SlotAction(resetSlot, killSlot, (sessionId, device) => ask.showSession(sessionId, device));
 const setupAction = new SetupAction(refreshNow);
 
 const usageActions = [
@@ -137,6 +138,8 @@ const askKeys = {
   context: new AskContextAction(),
   header: new AskHeaderAction(),
   option: new AskOptionAction(),
+  queue: new AskQueueAction(),
+  back: new AskBackAction(),
   terminal: new AskTerminalAction(),
 };
 
@@ -151,17 +154,29 @@ for (const a of [
   askKeys.header,
   new AskDetailAction(),
   askKeys.option,
-  new AskQueueAction(),
-  new AskBackAction(),
+  askKeys.queue,
+  askKeys.back,
   askKeys.terminal,
 ]) {
   streamDeck.actions.registerAction(a);
 }
 await streamDeck.connect();
 
-startAsk(() => {
-  for (const key of Object.values(askKeys)) void key.repaint();
-});
+startAsk(
+  () => {
+    for (const key of Object.values(askKeys)) void key.repaint();
+  },
+  // The Terminal key: the session's own terminal when the dashboard knows it,
+  // else the directory claude-ask ran in.
+  (question) => {
+    const s = question.sessionId ? tracker.findSession(question.sessionId) : undefined;
+    const target = s ? { cwd: s.cwd, warpSession: s.warpSession, termProgram: s.termProgram } : question.cwd ? { cwd: question.cwd } : undefined;
+    if (!target) return;
+    void focusSession(target)
+      .then((res) => streamDeck.logger.info(`ask: focus ${res.reason} for cwd=${target.cwd}`))
+      .catch((err) => streamDeck.logger.warn(`ask: focus failed: ${err instanceof Error ? err.message : String(err)}`));
+  },
+);
 
 watchForReload({ pollMs: POLL_MS });
 

@@ -39,6 +39,9 @@ export interface SlotState {
   pressedLabel?: string;
   /** Badge captured at KeyDown, pinned for the same reason as `pressedLabel`. */
   pressedBadge?: string;
+  /** Session captured at KeyDown, pinned like `pressedFocus`: the press brings up
+   *  that session's pending deck question, whoever holds the slot at release. */
+  pressedSessionId?: string;
   /** Wall-clock ms du début d'arming (≥LONG_PRESS_MS tenu). undefined = pas en
    *  arming. Lu par le render-loop pour dessiner l'anneau "KILL". */
   killArmingSince?: number;
@@ -62,6 +65,8 @@ export class SlotAction extends SingletonAction {
   constructor(
     private readonly resetSlot: (sessionId: string) => Promise<void>,
     private readonly killSlot: (pid: number, sessionId: string) => Promise<void>,
+    /** Shows the session's pending deck question on `device`; false when it has none. */
+    private readonly showQuestion: (sessionId: string, device: string) => boolean,
   ) {
     super();
   }
@@ -111,6 +116,7 @@ export class SlotAction extends SingletonAction {
     slot.pressedLabel = slot.label;
     slot.pressedBadge = slot.badge;
     slot.pressedFocus = slot.focus;
+    slot.pressedSessionId = sessionId;
     // Un agent bg n'est pas killable (daemon partagé) : on garde le palier 1
     // (wipe du log) mais ni l'anneau KILL ni le palier 2.
     const killable = slot.killable === true;
@@ -164,12 +170,18 @@ export class SlotAction extends SingletonAction {
     // Relâché après 3s → kill déjà fired, no-op.
   }
 
-  /** Brings the session's terminal to the front. No paging on press: on an XL
+  /** Brings the session's terminal to the front, and when the session has a
+   *  question waiting on the deck, puts that question on this deck's answer keys
+   *  too (the terminal shows the full prompt). No paging on press: on an XL
    *  the slots outnumber the sessions, and attention-first ordering keeps the
    *  ones that need you in view.
    *  ponytail: add a dedicated page key if sessions routinely exceed the slots. */
   private async runShortPress(ev: KeyUpEvent): Promise<void> {
-    const target = this.state.get(ev.action.id)?.pressedFocus;
+    const pressed = this.state.get(ev.action.id);
+    if (pressed?.pressedSessionId && this.showQuestion(pressed.pressedSessionId, ev.action.device.id)) {
+      streamDeck.logger.info(`slot: showing the pending question of ${pressed.pressedSessionId}`);
+    }
+    const target = pressed?.pressedFocus;
     if (!target) {
       await ev.action.showAlert();
       return;

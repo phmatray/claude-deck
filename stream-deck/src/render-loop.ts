@@ -28,12 +28,13 @@ export async function renderAll(
     const branch = entry?.session.branch;
     const badge = entry?.session.badge;
     const todos = entry?.session.todos;
+    const deck = entry?.session.pendingQuestion !== undefined;
     // Only animated states advance the frame (see STATES) — a busy key with an
     // in-progress todo stays still rather than streaming frames to the deck.
     const useFrame = isAnimated(state) ? frame : 0;
 
     const svg = entry
-      ? renderIcon({ state, slot: slotIndex, label, branch, badge, frame: useFrame, todos })
+      ? renderIcon({ state, slot: slotIndex, label, branch, badge, deck, frame: useFrame, todos })
       : renderIcon({ state: "empty", slot: slotIndex, label: "", frame: 0 });
     const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svg, "utf8").toString("base64");
 

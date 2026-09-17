@@ -5,6 +5,7 @@ import type { SessionState } from "./icons/index.js";
 import { isUsageRefreshCwd, SESSIONS_DIR } from "./env.js";
 import { pruneGitCache, readGitInfo } from "./git-info.js";
 import { parseEventLog, reduceEvents, type DerivedState, type TodoStatus } from "./session-events.js";
+import type { QuestionKind } from "./ask/queue.js";
 
 /** Surface readdir errors to the polling loop so it can log them once. */
 export let lastReadError: string | undefined;
@@ -100,6 +101,9 @@ export interface SessionInfo {
    *  ordering is what keeps the session you're actually working in on slot 1
    *  when there are more live sessions than keys on the deck. */
   lastActivityAt: number;
+  /** The session's oldest question waiting on the deck (claude-ask), joined by
+   *  sessionId each tick. */
+  pendingQuestion?: { id: string; kind: QuestionKind };
 }
 
 const isPositiveInt = (x: unknown): x is number =>
@@ -355,8 +359,17 @@ export async function wipeAllEventLogs(): Promise<{ wiped: number; errors: strin
   return { wiped, errors };
 }
 
+/** A question on the deck is the most precise "needs you" signal there is: it
+ *  appears the instant the prompt does (the permission_prompt Notification lags
+ *  ~6 s), and it is gone the instant the question is. */
+const PENDING_QUESTION_STATE: Record<QuestionKind, SessionState> = {
+  permission: "awaiting_permission",
+  plan: "awaiting_plan",
+  ask: "awaiting_question",
+};
+
 /** State for the icon, derived from session status + event-log projection + liveness.
- *  Priority: finished > error > awaiting_plan > awaiting_permission >
+ *  Priority: finished > error > pending deck question > awaiting_plan > awaiting_permission >
  *  awaiting_question > awaiting > subagent > working > idle. Plan approval ranks
  *  first among "needs you" states because users can sit on it longest; the more
  *  specific flags (permission, question) win over the generic catch-all so the
@@ -368,6 +381,7 @@ export function deriveState(s: SessionInfo, alive: boolean): SessionState {
   if (!alive) return "finished";
   if (s.kind === "bg") return deriveBgState(s);
   if (s.errored) return "error";
+  if (s.pendingQuestion) return PENDING_QUESTION_STATE[s.pendingQuestion.kind];
   if (s.awaitingPlan) return "awaiting_plan";
   if (s.awaitingPermission) return "awaiting_permission";
   if (s.awaitingQuestion) return "awaiting_question";

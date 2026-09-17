@@ -36,6 +36,8 @@ export interface IconOptions {
   branch?: string;
   /** Corner disambiguator (`b7`) for sessions sharing one worktree. */
   badge?: string;
+  /** The session has a question waiting on the deck's answer keys. */
+  deck?: boolean;
   /** Animation frame, 0..ANIMATION_FRAMES-1. */
   frame?: number;
   /** TodoWrite snapshot — renders a left-edge progress column when non-empty. */
@@ -84,11 +86,11 @@ function renderSlotBadge(slotText: string, accent: string): string {
   return `<text x="128" y="${BADGE_BASELINE}" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="${BADGE_FONT}" font-weight="700" fill="${accent}" opacity="0.8" text-anchor="end">${xmlEscape(slotText)}</text>`;
 }
 
-/** Coin haut-gauche : 144-128=16 depuis le bord, miroir exact du badge numéro de
- *  slot (haut-droite, x=128) → jamais de collision. Porte le tag `bg` et/ou le
- *  suffixe désambiguïsateur des sessions qui partagent un worktree. */
-function renderTopLeftBadge(text: string, accent: string): string {
-  return `<text x="16" y="${BADGE_BASELINE}" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="${BADGE_FONT}" font-weight="700" fill="${accent}" opacity="0.8" text-anchor="start">${xmlEscape(text)}</text>`;
+/** Top-left corner, x=16: the exact mirror of the slot number (top right, x=128),
+ *  so the two never collide. Carries the `bg` tag and/or the disambiguating suffix
+ *  of sessions sharing a worktree, after the deck badge when there is one. */
+function renderTopLeftBadge(text: string, accent: string, x = 16): string {
+  return `<text x="${x}" y="${BADGE_BASELINE}" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="${BADGE_FONT}" font-weight="700" fill="${accent}" opacity="0.8" text-anchor="start">${xmlEscape(text)}</text>`;
 }
 
 /** How to draw the branch caption: one line at full size, one line a size down,
@@ -100,7 +102,24 @@ function branchCaption(branch: string): { lines: string[]; fontSize: number } {
   return { lines: wrapped ?? [branch], fontSize: BOTTOM_TWO_FONT };
 }
 
-export function renderIcon({ state, slot, label, branch, badge, frame = 0, todos }: IconOptions): string {
+/** Deck badge geometry: a 14x10 key with three dots, sitting in the badge band. */
+const DECK_BADGE_X = 16;
+const DECK_BADGE_W = 14;
+const DECK_BADGE_H = 10;
+const DECK_BADGE_GAP = 4;
+
+/** "A question waits on the deck for this session": a small filled key with three
+ *  dots, drawn in the label colour with the dots punched out in the background. */
+function renderDeckBadge(color: string, bg: string): string {
+  const y = BADGE_BASELINE - 9;
+  const cy = y + DECK_BADGE_H / 2;
+  const dots = [3.5, 7, 10.5]
+    .map((dx) => `<circle cx="${DECK_BADGE_X + dx}" cy="${cy}" r="1.3" fill="${bg}"/>`)
+    .join("");
+  return `<rect x="${DECK_BADGE_X}" y="${y}" width="${DECK_BADGE_W}" height="${DECK_BADGE_H}" rx="2.5" fill="${color}"/>${dots}`;
+}
+
+export function renderIcon({ state, slot, label, branch, badge, deck = false, frame = 0, todos }: IconOptions): string {
   const { bg, accent, label: labelColor } = STATES[state].palette;
   const slotText = state === "empty" ? "" : String(slot);
   const isEmpty = state === "empty";
@@ -151,7 +170,11 @@ export function renderIcon({ state, slot, label, branch, badge, frame = 0, todos
   // in the same worktree render identically otherwise, and neither deserves a
   // whole text line.
   const cornerText = isEmpty ? "" : [isBgState(state) ? "bg" : "", badge ?? ""].filter(Boolean).join(" ");
-  const cornerBadge = cornerText ? renderTopLeftBadge(cornerText, accent) : "";
+  const showDeck = deck && !isEmpty;
+  const deckBadge = showDeck ? renderDeckBadge(labelColor, bg) : "";
+  const cornerBadge = cornerText
+    ? renderTopLeftBadge(cornerText, accent, showDeck ? DECK_BADGE_X + DECK_BADGE_W + DECK_BADGE_GAP : DECK_BADGE_X)
+    : "";
 
   let pulseOverlay = "";
   if (STATES[state].pulseBg) {
@@ -170,6 +193,7 @@ export function renderIcon({ state, slot, label, branch, badge, frame = 0, todos
 ${pulseOverlay}
 <rect x="${BORDER_INSET}" y="${BORDER_INSET}" width="${BORDER_SIZE}" height="${BORDER_SIZE}" rx="${BORDER_RADIUS}" fill="none" stroke="${accent}" stroke-width="${BORDER_STROKE}" stroke-linejoin="round" opacity="${isEmpty ? "0.45" : "0.95"}"/>
 ${slotBadge}
+${deckBadge}
 ${cornerBadge}
 ${topLine}
 <g transform="${motifTransform}">${STATES[state].motif(frame, accent)}</g>

@@ -1,120 +1,59 @@
 import streamDeck, { DeviceType } from "@elgato/streamdeck";
-import { mkdirSync, readFileSync, watchFile, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { ASK_DIR } from "../env.js";
+import { createController } from "./controller.js";
+import { createQueue, type Question } from "./queue.js";
 
 /**
- * The answer-key side of the `claude-ask` file protocol: `claude-ask` writes
- * question.json and polls answer.json; this module watches the question, puts
- * the deck on the bundled profile while one is pending, and writes the answer
- * when a key is pressed.
+ * SDK glue for the answer keys: binds the question queue (queue.ts) and the
+ * display state machine (controller.ts) to the Stream Deck's devices and profiles.
  */
 
-/** The bundled profile (manifest `Profiles[].Name`) the answer keys live on. */
-const PROFILE_NAME = "Claude Deck";
-const QUESTION_FILE = join(ASK_DIR, "question.json");
-const ANSWER_FILE = join(ASK_DIR, "answer.json");
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-export interface AskOption {
-  label: string;
-  description?: string;
-}
+const queue = createQueue(ASK_DIR, (msg) => streamDeck.logger.info(msg));
 
-export interface Question {
-  id: string;
-  header?: string;
-  question?: string;
-  context?: string;
-  options?: AskOption[];
-}
-
-export type Answer = { index: number; label: string; cancelled: false } | { cancelled: true };
-
-let question: Question | null = null;
-/** Deck the profile was switched on — the one to send back once the question goes. */
-let shownOn: string | undefined;
 let repaint: () => void = () => {};
-
-export const currentQuestion = (): Question | null => question;
+let focus: (question: Question) => void = () => {};
 
 /** The bundled profile targets the XL, so prefer one; otherwise the first deck
  *  with a grid of keys (more than one row: not a pedal or a strip of G keys). */
-function targetDevice(): string | undefined {
+function defaultDevice(): string | undefined {
   const connected = [...streamDeck.devices].filter((d) => d.isConnected);
   return (connected.find((d) => d.type === DeviceType.StreamDeckXL) ?? connected.find((d) => d.size.rows > 1))?.id;
 }
 
-function showProfile(): void {
-  const device = targetDevice();
-  if (!device) return;
-  shownOn = device;
-  streamDeck.profiles.switchToProfile(device, PROFILE_NAME, 0).catch((err: unknown) => {
-    streamDeck.logger.warn(`ask: switch to ${PROFILE_NAME} failed: ${err instanceof Error ? err.message : String(err)}`);
+export const ask = createController({
+  pending: () => queue.pending(),
+  answer: (id, index) => queue.answer(id, index),
+  cancel: (id) => queue.cancel(id),
+  switchTo(device, profile) {
+    // Page 0 on the way in; no profile name returns the deck to whatever it showed before.
+    const request = profile ? streamDeck.profiles.switchToProfile(device, profile, 0) : streamDeck.profiles.switchToProfile(device);
+    request.catch((err: unknown) => streamDeck.logger.warn(`ask: switch to ${profile ?? "previous profile"} failed: ${errorText(err)}`));
+  },
+  focus: (question) => focus(question),
+  defaultDevice,
+  repaint: () => repaint(),
+});
+
+/** The oldest pending question of a dashboard session, for its key's badge and state. */
+export const pendingQuestion = (sessionId: string): Question | undefined => queue.bySession(sessionId);
+
+/** Starts watching for questions. `onRepaint` repaints every answer key; `onFocus`
+ *  brings a question's session terminal to the front. */
+export function startAsk(onRepaint: () => void, onFocus: (question: Question) => void): void {
+  repaint = onRepaint;
+  focus = onFocus;
+  let shown: string | undefined;
+  queue.onChange(() => {
+    ask.sync();
+    const q = ask.active();
+    if (q && q.id !== shown) streamDeck.logger.info(`ask: ${q.kind} ${q.header || q.question || ""} (${queue.pending().length} pending)`);
+    shown = q?.id;
   });
-}
-
-/** Omitting the profile name returns the deck to whatever profile was active before. */
-function hideProfile(): void {
-  if (!shownOn) return;
-  const device = shownOn;
-  shownOn = undefined;
-  streamDeck.profiles.switchToProfile(device).catch((err: unknown) => {
-    streamDeck.logger.warn(`ask: switch back failed: ${err instanceof Error ? err.message : String(err)}`);
-  });
-}
-
-function readQuestion(): void {
-  let next: Question | null = null;
-  try {
-    const raw = readFileSync(QUESTION_FILE, "utf8");
-    if (raw.trim()) next = JSON.parse(raw) as Question;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      streamDeck.logger.warn(`ask: cannot read question: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  const nextId = next?.id ?? null;
-  if ((question?.id ?? null) === nextId) return;
-
-  question = nextId ? next : null;
-  repaint();
-
-  if (question && !shownOn) {
-    showProfile();
-    streamDeck.logger.info(`ask: ${question.header || question.question || ""}`);
-  } else if (!question) {
-    // Withdrawn from the CLI side: timed out, cancelled, or answered in the terminal.
-    hideProfile();
-  }
-}
-
-/** Writes the answer `claude-ask` is polling for, then releases the deck. */
-export function answer(a: Answer): void {
-  if (!question) return;
-  mkdirSync(ASK_DIR, { recursive: true });
-  writeFileSync(ANSWER_FILE, JSON.stringify({ id: question.id, ...a, answeredAt: new Date().toISOString() }, null, 2));
-  question = null;
-  repaint();
-  hideProfile();
-}
-
-/** Starts watching for questions; `onChange` repaints every answer key. */
-export function startAsk(onChange: () => void): void {
-  repaint = onChange;
-  try {
-    mkdirSync(ASK_DIR, { recursive: true });
-  } catch (err) {
-    // Not fatal: this process also runs the session dashboard. watchFile copes
-    // with a missing directory, and claude-ask creates it anyway.
-    streamDeck.logger.error(`ask: cannot create ${ASK_DIR}: ${err instanceof Error ? err.message : String(err)}`);
-  }
   // Devices from the registration info start out disconnected: connect() resolves
   // before the app's deviceDidConnect messages, so a question already waiting at
   // startup finds no deck. Retry when one connects (also covers a hot-plugged XL).
-  streamDeck.devices.onDeviceDidConnect(() => {
-    if (question && !shownOn) showProfile();
-  });
-  watchFile(QUESTION_FILE, { interval: 200 }, readQuestion);
-  readQuestion();
+  streamDeck.devices.onDeviceDidConnect(() => ask.sync());
+  queue.start();
 }

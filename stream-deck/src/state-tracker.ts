@@ -8,6 +8,7 @@ import {
   type SessionInfo,
 } from "./sessions.js";
 import { filterLiveSessions } from "./live-pids.js";
+import type { QuestionKind } from "./ask/queue.js";
 
 const FINISHED_TTL_MS = 3_000;
 
@@ -25,6 +26,8 @@ const ATTENTION_STATES: ReadonlySet<SessionState> = new Set<SessionState>([
   "bg_awaiting",
 ]);
 
+/** A pending deck question needs no clause of its own: deriveState already maps
+ *  it to one of the awaiting_* states above. */
 const attentionRank = (e: DisplayEntry): number => (ATTENTION_STATES.has(e.state) ? 0 : 1);
 
 export interface DisplayEntry {
@@ -43,7 +46,10 @@ export interface DisplayEntry {
  * for FINISHED_TTL_MS after their process exits. Pure given inputs (sessions,
  * live PIDs, now) but mutates its private maps to track transitions.
  */
-export function createStateTracker() {
+export function createStateTracker(
+  /** The session's pending deck question, if any (the answer-key queue). */
+  pendingQuestion: (sessionId: string) => { id: string; kind: QuestionKind } | undefined = () => undefined,
+) {
   /** Carry-over map keyed by sessionId so a session stays visible briefly after its process dies. */
   const recentlyFinished = new Map<string, DisplayEntry>();
   /** Sessions seen alive in the previous tick — used to detect "just died" transitions. */
@@ -80,6 +86,10 @@ export function createStateTracker() {
    */
   async function tick(actionCount: number): Promise<DisplayEntry[]> {
     const sessions = await readAllSessions();
+    for (const s of sessions) {
+      const q = pendingQuestion(s.sessionId);
+      s.pendingQuestion = q && { id: q.id, kind: q.kind };
+    }
     const live = filterLiveSessions(sessions);
     const liveEntries: DisplayEntry[] = sessions
       .filter((s) => live.has(s.sessionId))
@@ -165,6 +175,11 @@ export function createStateTracker() {
     return visibleEntries;
   }
 
+  /** Any live or just-finished session, on the keys or not. */
+  function findSession(sessionId: string): SessionInfo | undefined {
+    return sortedEntries.find((e) => e.session.sessionId === sessionId)?.session;
+  }
+
   /** Short press: scroll the deck one page down the sorted list, wrapping at
    *  the end. No-op when everything already fits on the keys. Takes effect on
    *  the next tick, which the caller triggers immediately. */
@@ -185,5 +200,5 @@ export function createStateTracker() {
     return visibleEntries.some((e) => iconNeedsAnimation(e.state));
   }
 
-  return { tick, getEntries, needsAnimation, advanceView };
+  return { tick, getEntries, findSession, needsAnimation, advanceView };
 }

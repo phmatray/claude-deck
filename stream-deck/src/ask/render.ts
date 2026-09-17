@@ -74,7 +74,7 @@ interface BlockOptions {
 }
 
 function block(text: string, { boxW, boxH, centerY, color, maxLines = 3, sizes = LABEL_SIZES }: BlockOptions): string {
-  // Every key's text comes through here from question.json, which is untrusted:
+  // Every key's text comes through here from a question file, which is untrusted:
   // a number or a missing label must render, not throw.
   const { size, lines } = fit(String(text), boxW, boxH, maxLines, sizes);
   const lh = Math.round(size * 1.1);
@@ -129,6 +129,17 @@ export function idleQuestionKey(): string {
 }
 
 export function cancelKey(): string {
-  const body = block("Use terminal", { boxW: 124, boxH: 118, centerY: 74, color: "#FFE2E2" });
+  const body = block("Terminal", { boxW: 124, boxH: 118, centerY: 74, color: "#FFE2E2" });
   return key("#3A1517", "#A24A4A", body);
+}
+
+/** How many other questions wait behind the one on the keys. */
+export function queueKey(others: number): string {
+  const body = block(`+${others}`, { boxW: 124, boxH: 118, centerY: 74, color: "#FFFFFF", maxLines: 1 });
+  return key("#0E2545", ACCENT, body);
+}
+
+export function backKey(): string {
+  const body = block("Retour", { boxW: 124, boxH: 118, centerY: 74, color: "#D6DEE8" });
+  return key("#111820", "#43536B", body);
 }
