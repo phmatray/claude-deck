@@ -1,14 +1,14 @@
 {
-  "name": "streamdeck-claude-answer",
-  "displayName": "Answer Claude on a Stream Deck",
-  "version": "1.1.0",
-  "description": "Claude Code puts its multiple-choice questions on your Stream Deck. You answer by pressing a key.",
+  "name": "claude-deck",
+  "displayName": "Claude Deck",
+  "version": "2.0.0",
+  "description": "Stream Deck for Claude Code: answer questions and permission prompts from the keys.",
   "author": {
-    "name": "Dario Kondratiuk",
-    "url": "https://github.com/hardkoded"
+    "name": "Philippe Matray",
+    "url": "https://github.com/phmatray"
   },
-  "homepage": "https://github.com/hardkoded/streamdeck-claude-answer",
-  "repository": "https://github.com/hardkoded/streamdeck-claude-answer",
+  "homepage": "https://github.com/phmatray/claude-deck",
+  "repository": "https://github.com/phmatray/claude-deck",
   "license": "MIT",
-  "keywords": ["streamdeck", "elgato", "hardware", "questions", "input"]
+  "keywords": ["streamdeck", "elgato", "hardware", "questions", "permissions"]
 }

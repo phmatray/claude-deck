@@ -109,7 +109,7 @@ PRUNE_FILTER='
         .hooks |= map(
           select(
             (.command // "")
-            | test("streamdeck-claude.*notification\\.(ps1|sh)") | not
+            | test("(streamdeck-claude|claude-deck).*notification\\.(ps1|sh)") | not
           )
         )
         | select(.hooks | length > 0)

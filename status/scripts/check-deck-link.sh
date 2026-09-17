@@ -5,7 +5,7 @@
 # and the app reads the serial number where the firmware version should be.
 # Fix when red: unplug the deck ≥15 s, replug. Run: sh scripts/check-deck-link.sh
 LOG="$HOME/Library/Logs/ElgatoStreamDeck/StreamDeck.log"
-ASK="$(ls "$HOME"/.claude/plugins/cache/hardkoded/streamdeck-claude-answer/*/bin/claude-ask 2>/dev/null | tail -1)"
+ASK="$(ls "$HOME"/.claude/plugins/cache/phmatray/claude-deck/*/bin/claude-ask 2>/dev/null | tail -1)"
 [ -x "$ASK" ] || { echo "claude-ask not installed"; exit 2; }
 T=$(date +%Y-%m-%dT%H:%M:%S)
 printf '%s' '{"header":"Probe","question":"probe","timeout":2,"context":"probe","options":["-"]}' | "$ASK" >/dev/null 2>&1

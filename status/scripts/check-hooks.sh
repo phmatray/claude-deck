@@ -33,8 +33,8 @@ EXPECTED_EVENTS=(
 
 WSL_HOOK="${ROOT}/hooks/notification.sh"
 WIN_HOOK="${ROOT}/hooks/notification.ps1"
-WSL_HOOK_REGEX="streamdeck-claude.*notification\\.sh"
-WIN_HOOK_REGEX="streamdeck-claude.*notification\\.ps1"
+WSL_HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.sh"
+WIN_HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.ps1"
 
 if [ -t 1 ]; then
   GREEN=$'\e[32m'; RED=$'\e[31m'; YELLOW=$'\e[33m'; DIM=$'\e[2m'; BOLD=$'\e[1m'; RESET=$'\e[0m'

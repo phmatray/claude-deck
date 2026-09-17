@@ -46,8 +46,8 @@ interface SettingsTarget {
   scriptRe: RegExp;
 }
 
-const POSIX_HOOK_RE = /streamdeck-claude.*notification\.sh/;
-const WINDOWS_HOOK_RE = /streamdeck-claude.*notification\.ps1/;
+const POSIX_HOOK_RE = /(streamdeck-claude|claude-deck).*notification\.sh/;
+const WINDOWS_HOOK_RE = /(streamdeck-claude|claude-deck).*notification\.ps1/;
 
 const SETTINGS_TARGETS: SettingsTarget[] = platform() === "win32"
   ? [

@@ -1,17 +1,17 @@
 {
-  "name": "hardkoded",
+  "name": "phmatray",
   "owner": {
-    "name": "hardkoded",
-    "url": "https://github.com/hardkoded"
+    "name": "Philippe Matray",
+    "url": "https://github.com/phmatray"
   },
-  "displayName": "hardkoded plugins",
-  "description": "Claude Code plugins by hardkoded",
+  "displayName": "phmatray plugins",
+  "description": "Claude Code plugins by Philippe Matray",
   "plugins": [
     {
-      "name": "streamdeck-claude-answer",
-      "displayName": "Answer Claude on a Stream Deck",
-      "description": "Claude Code puts its multiple-choice questions on your Stream Deck. You answer by pressing a key.",
-      "version": "1.1.0",
+      "name": "claude-deck",
+      "displayName": "Claude Deck",
+      "description": "Stream Deck for Claude Code: answer questions and permission prompts from the keys.",
+      "version": "2.0.0",
       "source": "."
     }
   ]
