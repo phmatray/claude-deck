@@ -35,9 +35,9 @@ export interface DisplayEntry {
   state: SessionState;
   /** When state became "finished"; used to expire the entry after FINISHED_TTL_MS. */
   finishedAt?: number;
-  /** 1-based position in the *full* sorted list — what the key's corner badge
-   *  shows, so a scrolled deck reads "3" rather than "1". Stamped when the
-   *  visible window is sliced; absent on entries still in the full list. */
+  /** 1-based position in the sorted list — what the key's corner badge shows.
+   *  Stamped when the visible entries are sliced off the front; absent on the
+   *  ones that didn't fit on the deck. */
   slotNumber?: number;
 }
 
@@ -56,18 +56,8 @@ export function createStateTracker(
   let prevLiveIds = new Set<string>();
   /** Every live/just-finished session, sorted. May be longer than the deck. */
   let sortedEntries: DisplayEntry[] = [];
-  /** The window of `sortedEntries` actually on the keys; consumed by render(). */
+  /** The head of `sortedEntries` actually on the keys; consumed by render(). */
   let visibleEntries: DisplayEntry[] = [];
-  /** How far down `sortedEntries` the deck is scrolled. Advanced by a short
-   *  press so a deck with fewer keys than sessions can still reach them all. */
-  let viewOffset = 0;
-  /** Visible slot count from the last tick — the page size a press steps by. */
-  let slotCount = 0;
-  /** sessionIds that needed the user last tick. The reset below is edge- rather
-   *  than level-triggered: a session that simply keeps waiting must not re-snap
-   *  the view every tick, or paging past it would be impossible for as long as
-   *  it waits — which is exactly when reaching the others matters. */
-  let prevAttentionIds = new Set<string>();
 
   let lastDiag = "";
   function maybeLog(msg: string): void {
@@ -145,26 +135,13 @@ export function createStateTracker(
         || a.session.pid - b.session.pid,
     );
 
-    // A session that *newly* needs you snaps the deck back to the top of the
-    // list — otherwise a scrolled-away view would hide the very thing the
-    // plugin exists to surface.
-    const attentionIds = new Set(
-      sortedEntries.filter((e) => ATTENTION_STATES.has(e.state)).map((e) => e.session.sessionId),
-    );
-    const newlyNeedy = [...attentionIds].some((id) => !prevAttentionIds.has(id));
-    prevAttentionIds = attentionIds;
-    if (newlyNeedy) viewOffset = 0;
-    // Sessions come and go under the window; never leave it past the end.
-    if (viewOffset >= sortedEntries.length) viewOffset = 0;
-
-    slotCount = actionCount;
-    visibleEntries = sortedEntries
-      .slice(viewOffset, viewOffset + actionCount)
-      .map((e, i) => ({ ...e, slotNumber: viewOffset + i + 1 }));
+    // The keys show the head of the list: the sort above already puts whatever
+    // needs you first, and on an XL the slots outnumber the sessions.
+    visibleEntries = sortedEntries.slice(0, actionCount).map((e, i) => ({ ...e, slotNumber: i + 1 }));
 
     maybeLog(
       `tick: sessions=${sessions.length} live=${live.size}` +
-        ` actions=${actionCount} view=${viewOffset}/${sortedEntries.length}` +
+        ` actions=${actionCount} shown=${visibleEntries.length}/${sortedEntries.length}` +
         (lastReadError ? ` readError=${lastReadError}` : ""),
     );
 
@@ -180,16 +157,6 @@ export function createStateTracker(
     return sortedEntries.find((e) => e.session.sessionId === sessionId)?.session;
   }
 
-  /** Short press: scroll the deck one page down the sorted list, wrapping at
-   *  the end. No-op when everything already fits on the keys. Takes effect on
-   *  the next tick, which the caller triggers immediately. */
-  function advanceView(): void {
-    const step = Math.max(1, slotCount);
-    if (sortedEntries.length <= step) return;
-    const next = viewOffset + step;
-    viewOffset = next >= sortedEntries.length ? 0 : next;
-  }
-
   /**
    * Whether anything on screen needs frame-to-frame redraw (animated motif or a
    * pulsing in-progress todo). Lets the animation loop short-circuit the render
@@ -200,5 +167,5 @@ export function createStateTracker(
     return visibleEntries.some((e) => iconNeedsAnimation(e.state));
   }
 
-  return { tick, getEntries, findSession, needsAnimation, advanceView };
+  return { tick, getEntries, findSession, needsAnimation };
 }
