@@ -103,7 +103,8 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
   assert.equal(decision((await done).out).behavior, "deny");
 }
 
-// An option id the hook doesn't know → no decision, the dialog decides
+// An option id the question doesn't offer → claude-ask exits 3 → no decision, the dialog decides.
+// (The hook's own DECISIONS guard is unreachable while every option has a decision.)
 {
   const { home } = session();
   const { askDir, done } = run(bash, home);

@@ -79,6 +79,7 @@ assert.deepEqual([files(questionsDir), files(answersDir)], [[], []]);
 {
   const c = ask({ sessionId: "sess-c", options: ["X"] });
   const qc = await questionOf("sess-c");
+  assert.equal(Date.parse(qc.expiresAt) - Date.parse(qc.createdAt), 180_000, "default timeout: 180 s");
   writeFileSync(path.join(answersDir, `${qc.id}.json`), JSON.stringify({ id: qc.id, cancelled: true, reason: "terminal" }));
   assert.deepEqual(await c.done, { code: 2, out: "" });
   assert.deepEqual([files(questionsDir), files(answersDir)], [[], []]);

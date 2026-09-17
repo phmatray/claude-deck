@@ -17,6 +17,7 @@ process.chdir(home);
 const { createStateTracker } = await import("../src/state-tracker.ts");
 const { deriveState } = await import("../src/sessions.ts");
 const { renderIcon } = await import("../src/icons/index.ts");
+const { renderAll } = await import("../src/render-loop.ts");
 // The SDK's logger swallows uncaught exceptions (a failed assert would exit 0): fail loudly.
 process.on("uncaughtException", (err) => {
   console.error(err);
@@ -42,8 +43,21 @@ for (const [kind, state] of [["permission", "awaiting_permission"], ["plan", "aw
 }
 assert.equal(tracker.getEntries()[0].session.pendingQuestion?.id, "q1", "joined on the entry");
 assert.equal(tracker.findSession("new")?.cwd, join(home, "new"));
+
+// the deck badge in any colour: the label colour differs per state
+const deckRect = /<rect x="16" y="10" width="14" height="10" rx="2.5" fill="#[0-9a-f]{6}"\/>/i;
+// render-loop.ts carries the entry's question onto the key it paints (one key: the first entry)
+let painted = "";
+const oneKey = { orderedActions: () => [{ id: "k1", setImage: async (url: string) => void (painted = url) }], getState: () => ({}) };
+const paintedSvg = async () => {
+  await renderAll(oneKey as any, tracker.getEntries(), 0);
+  return Buffer.from(painted.slice(painted.indexOf(",") + 1), "base64").toString("utf8");
+};
+assert.match(await paintedSvg(), deckRect, "the key of a session with a question gets the badge");
+
 pending.clear();
 assert.deepEqual(await view(), ["new:idle", "old:working"], "gone with the question");
+assert.doesNotMatch(await paintedSvg(), deckRect, "no question, no badge");
 
 // error keeps precedence
 const errored = { ...tracker.getEntries()[1].session, errored: true, pendingQuestion: { id: "q", kind: "permission" as const } };
@@ -53,11 +67,12 @@ const bg = { ...errored, errored: false, kind: "bg" as const, bgStatus: "running
 assert.equal(deriveState(bg, true), "bg_awaiting_permission");
 assert.equal(deriveState({ ...bg, pendingQuestion: { id: "q", kind: "ask" as const } }, true), "bg_awaiting");
 assert.equal(deriveState({ ...bg, pendingQuestion: undefined }, true), "bg_working");
+await tracker.tick(1);
+assert.equal(tracker.findSession("old")?.cwd, join(home, "old"), "found even when scrolled off the keys");
 
 // the deck badge: a 14x10 key at the badge position, the b7 badge pushed after it
 const svg = (deck: boolean, badge?: string) => renderIcon({ state: "awaiting_permission", slot: 1, label: "repo", badge, deck });
-const deckRect = /<rect x="16" y="10" width="14" height="10" rx="2.5" fill="#fde68a"\/>/;
-assert.match(svg(true), deckRect);
+assert.match(svg(true), /<rect x="16" y="10" width="14" height="10" rx="2.5" fill="#fde68a"\/>/, "in the label colour");
 assert.equal((svg(true).match(/<circle [^>]*r="1.3"/g) ?? []).length, 3, "three dots");
 assert.doesNotMatch(svg(false), deckRect);
 assert.match(svg(true, "b7"), /<text x="34" y="19"[^>]*>b7<\/text>/);
