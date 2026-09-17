@@ -6,15 +6,9 @@ import streamDeck, {
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
-import { platform } from "node:os";
 import { renderUsageIcon, type UsageKind } from "./icons/usage-icon.js";
 import type { UsageSnapshot } from "./usage.js";
 import type { UsageRefreshResult } from "./usage-refresh.js";
-
-/** The usage cache only exists at `~/.claude.json` on the machine running the
- *  CLI. On Windows the plugin reads sessions over a UNC path into WSL, which
- *  is a different home — rather than guess, the keys say "macOS only" there. */
-export const USAGE_SUPPORTED = platform() === "darwin";
 
 /** How long a press waits for a verdict before answering anyway. The refresh
  *  is deliberately NOT cancelled when this expires: killing the child early
@@ -65,10 +59,6 @@ abstract class UsageAction extends SingletonAction {
    *  covers both an outright failure and a refresh still grinding away, since
    *  from the user's side those are the same thing at that moment. */
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    if (!USAGE_SUPPORTED) {
-      await ev.action.showAlert().catch(() => {});
-      return;
-    }
     // Detached from the race on purpose: whichever side wins, the refresh runs
     // to completion and repaints the tile. The catch is what keeps a rejection
     // from surfacing as an unhandled promise once the timer has already spoken.
@@ -96,7 +86,7 @@ abstract class UsageAction extends SingletonAction {
 
   async render(snapshot: UsageSnapshot | undefined): Promise<void> {
     if (this.instances.size === 0) return;
-    const svg = renderUsageIcon({ kind: this.kind, snapshot, supported: USAGE_SUPPORTED });
+    const svg = renderUsageIcon({ kind: this.kind, snapshot });
     const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svg, "utf8").toString("base64");
     const pending: Promise<unknown>[] = [];
     for (const [id, keyAction] of this.instances) {

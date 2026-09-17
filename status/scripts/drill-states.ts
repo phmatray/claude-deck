@@ -137,10 +137,8 @@ function tryUnlink(path: string) {
 }
 
 function spawnSleeper(): ChildProcess {
-  // Hold-alive child whose PID lands in the same namespace as the drill itself
-  // (WSL pids on WSL, Win pids on Windows, POSIX pids on macOS) so the plugin's
-  // liveness check sees it. `node -e setInterval` is the only "sleep" guaranteed
-  // on PATH on all three platforms.
+  // Hold-alive child so the plugin's liveness check sees a real pid.
+  // `node -e setInterval` needs nothing beyond the node running the drill.
   return spawn(process.execPath, ["-e", "setInterval(() => {}, 1e9)"], {
     stdio: "ignore",
     detached: false,

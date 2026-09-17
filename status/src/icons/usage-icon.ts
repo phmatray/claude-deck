@@ -106,8 +106,8 @@ function ageText(fetchedAtMs: number, now: number): string {
   return hours < 24 ? `${hours}h old` : `${Math.floor(hours / 24)}d old`;
 }
 
-/** Neutral tile for "nothing to show" — missing snapshot, window absent from
- *  this plan, or a platform we don't read. Never an error tile: the plugin's
+/** Neutral tile for "nothing to show" — missing snapshot or window absent from
+ *  this plan. Never an error tile: the plugin's
  *  session keys are unaffected and the user needn't act. */
 function placeholder(kind: UsageKind, line: string): string {
   return frame(IDLE_ACCENT, "0.5", [
@@ -171,15 +171,12 @@ function renderScoped(windows: ScopedUsageWindow[], snapshot: UsageSnapshot, now
 export interface UsageIconOptions {
   kind: UsageKind;
   snapshot?: UsageSnapshot;
-  /** False on platforms where we don't read the usage cache. */
-  supported: boolean;
   /** Wall-clock ms; injectable for the drill script. */
   now?: number;
 }
 
-export function renderUsageIcon({ kind, snapshot, supported, now }: UsageIconOptions): string {
+export function renderUsageIcon({ kind, snapshot, now }: UsageIconOptions): string {
   const t = now ?? Date.now();
-  if (!supported) return placeholder(kind, "macOS only");
   if (!snapshot) return placeholder(kind, "no data yet");
   if (kind === "model_scoped") {
     return snapshot.modelScoped.length > 0

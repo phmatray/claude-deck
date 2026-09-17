@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# Verify that the streamdeck-claude hook is registered in both WSL and Windows
-# Claude Code settings.json — every event the state machine cares about, with
+# Verify that the streamdeck-claude hook is registered in Claude Code's
+# ~/.claude/settings.json — every event the state machine cares about, with
 # the right matcher, pointing at the right script. Run after `pnpm install:hook`
-# (and `:windows`) to confirm the install actually took.
+# to confirm the install actually took.
 #
 # Exit code: 0 if everything is wired up, 1 otherwise.
 #
 # Usage:
 #   bash scripts/check-hooks.sh
-#   WIN_USER=alice WSL_DISTRO_NAME=Ubuntu-22.04 bash scripts/check-hooks.sh
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WIN_USER="${WIN_USER:-julie}"
-WIN_HOME="/mnt/c/Users/${WIN_USER}"
-WSL_DISTRO="${WSL_DISTRO_NAME:-Ubuntu}"
 
 # event|matcher pairs — must stay in sync with scripts/install-hook.sh
 EXPECTED_EVENTS=(
@@ -31,10 +27,8 @@ EXPECTED_EVENTS=(
   "SessionEnd|"
 )
 
-WSL_HOOK="${ROOT}/hooks/notification.sh"
-WIN_HOOK="${ROOT}/hooks/notification.ps1"
-WSL_HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.sh"
-WIN_HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.ps1"
+HOOK="${ROOT}/hooks/notification.sh"
+HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.sh"
 
 if [ -t 1 ]; then
   GREEN=$'\e[32m'; RED=$'\e[31m'; YELLOW=$'\e[33m'; DIM=$'\e[2m'; BOLD=$'\e[1m'; RESET=$'\e[0m'
@@ -98,33 +92,14 @@ check_settings() {
 
 # --- Hook scripts on disk -------------------------------------------------
 echo "${BOLD}Hook scripts${RESET}"
-if [ -f "$WSL_HOOK" ] && [ -x "$WSL_HOOK" ]; then
-  ok "$WSL_HOOK (executable)"
+if [ -f "$HOOK" ] && [ -x "$HOOK" ]; then
+  ok "$HOOK (executable)"
 else
-  fail "$WSL_HOOK (missing or not executable)"
-fi
-# notification.ps1 is irrelevant on macOS; only check it elsewhere.
-if [ "$(uname -s)" != "Darwin" ]; then
-  if [ -f "$WIN_HOOK" ]; then
-    ok "$WIN_HOOK"
-  else
-    fail "$WIN_HOOK (missing)"
-  fi
+  fail "$HOOK (missing or not executable)"
 fi
 
-# --- Local POSIX settings (WSL on Windows, macOS native) ------------------
-check_settings "Local hooks (${USER:-?})" "${HOME}/.claude/settings.json" "$WSL_HOOK_REGEX"
-
-# --- Windows settings (skipped on macOS — no WSL/Windows split here) ------
-if [ "$(uname -s)" != "Darwin" ]; then
-  if [ -d "$WIN_HOME" ]; then
-    check_settings "Windows hooks (${WIN_USER})" "${WIN_HOME}/.claude/settings.json" "$WIN_HOOK_REGEX"
-  else
-    echo
-    echo "${BOLD}Windows hooks (${WIN_USER})${RESET}"
-    warn "Windows home not found at ${WIN_HOME} — set WIN_USER=<name> if your account is different"
-  fi
-fi
+# --- Settings -------------------------------------------------------------
+check_settings "Hooks (${USER:-?})" "${HOME}/.claude/settings.json" "$HOOK_REGEX"
 
 # --- Summary --------------------------------------------------------------
 echo
@@ -132,6 +107,6 @@ if [ "$ALL_OK" -eq 1 ]; then
   echo "${GREEN}${BOLD}All hooks verified.${RESET}"
   exit 0
 else
-  echo "${RED}${BOLD}Some hooks are missing or misconfigured.${RESET} Re-run pnpm install:hook[:windows]."
+  echo "${RED}${BOLD}Some hooks are missing or misconfigured.${RESET} Re-run pnpm install:hook."
   exit 1
 fi

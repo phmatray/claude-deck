@@ -9,7 +9,6 @@ import { wipeAllEventLogs, wipeSessionEventLog } from "./sessions.js";
 import { killSession } from "./kill-session.js";
 import { checkHooks, HOOK_FIX_HINT } from "./hook-check.js";
 import {
-  USAGE_SUPPORTED,
   UsageModelsAction,
   UsageSessionAction,
   UsageWeekAction,
@@ -78,7 +77,7 @@ async function killSlot(pid: number, sessionId: string): Promise<void> {
  *  a stat() in the common case. */
 async function renderUsage(): Promise<void> {
   if (!usageActions.some((a) => a.hasInstances())) return;
-  const snapshot = USAGE_SUPPORTED ? await readUsageSnapshot() : undefined;
+  const snapshot = await readUsageSnapshot();
   await Promise.all(usageActions.map((a) => a.render(snapshot)));
 }
 
@@ -103,12 +102,9 @@ async function refreshUsage(): Promise<UsageRefreshResult> {
  *  populated by `willAppear`, which arrives after `connect()` resolves, so any
  *  check made at startup would read an empty list and skip. */
 async function runUsageRefresh(opts: { force?: boolean } = {}): Promise<UsageRefreshResult> {
-  // Both guards mean "nothing to fetch", not "the fetch broke" — this runs off
-  // the tick every second, and calling that a failure would be a lie about the
-  // overwhelming majority of callers. The press says so on the key itself; the
-  // unsupported case is the action's to report, since it owns that platform
-  // check already.
-  if (!USAGE_SUPPORTED) return "current";
+  // "Nothing to fetch", not "the fetch broke" — this runs off the tick every
+  // second, and calling that a failure would be a lie about the overwhelming
+  // majority of callers.
   if (!usageActions.some((a) => a.hasInstances())) return "current";
   // refreshUsageCache() leaves the freshly-parsed snapshot in usage.ts's cache,
   // so renderUsage() picks it up without another invalidation.
