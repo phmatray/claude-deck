@@ -36,9 +36,9 @@ then read the answer when the task completes.
 
 | Field | Notes |
 |---|---|
-| `question` | Full text. Printed in the terminal, not on the keys. |
-| `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal, `id` (optional, defaults to the index) comes back as `optionId`. `id: "terminal"` is reserved: that key acts as the Terminal key (exit 2). |
+| `question` | Full text. Printed in the terminal, and across the deck's detail keys followed by the numbered options. |
+| `header` | 1-3 words. This is what the header key shows. |
+| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal and on the detail keys, `id` (optional, defaults to the index) comes back as `optionId`. `id: "terminal"` is reserved: that key acts as the Terminal key (exit 2). |
 | `timeout` | Seconds, default 180. |
 | `context` | Defaults to the current directory's name, shown on the top-left key. |
 
@@ -59,13 +59,13 @@ ceiling for comfortable reading.
 - Good: `Add jitter`, `Token bucket`, `Skip it`
 - Too long: `Add jitter to the retry backoff`
 
-Keep the reasoning in `description` — the user reads that in the terminal while
-deciding, and presses the key to answer.
+Keep the reasoning in `description` — the user reads that on the detail keys (and in the
+terminal) while deciding, and presses the key to answer.
 
 ## Rules
 
-- **Always print the full question and all descriptions in your reply too.** The keys
-  cannot hold enough text to decide from alone.
+- **Always print the full question and all descriptions in your reply too.** The detail
+  keys hold two rows of text and cut the rest.
 - **Fall back, never guess.** On exit code `2` or `3`, ask the same question in the
   terminal instead. Do not pick an option on the user's behalf.
 - **Do not use this for anything a label cannot convey** — approving a specific command,

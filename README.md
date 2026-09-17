@@ -3,9 +3,9 @@
 Claude Code on a Stream Deck XL, in two halves:
 
 - **Session dashboard**: one key per running `claude` session, colour = state. Press a key to bring that session's terminal to the front (the exact Warp pane, or VS Code). Plus plan usage keys (5 h, week, per model).
-- **Answer keys** (the rest): Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Refuser**) go on the keys, one press answers.
+- **Answer keys** (the rest): Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
 
-![A question on the deck](docs/deck-question.png)
+![A permission prompt on the deck](docs/deck-permission.png)
 
 Built from two MIT projects, history kept: [k-ibaraki/streamdeck-claude](https://github.com/k-ibaraki/streamdeck-claude) by Julien Cruau became the dashboard, and [hardkoded/streamdeck-claude-answer](https://github.com/hardkoded/streamdeck-claude-answer) by Dario Kondratiuk became the answer keys. Added on top: focus on the exact Warp pane, animation only for states that need you (page switches stay fast), the XL profile, the permission keys.
 
@@ -84,9 +84,10 @@ Prints `{"index":0,"optionId":"0","label":"Add jitter","cancelled":false}`.
 
 | Field | Meaning |
 |---|---|
-| `question` | Full text. Goes to the terminal, not the keys. |
-| `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 items. `label` on the key, `description` in the terminal, optional `id` (default: the index) returned as `optionId`; `"terminal"` is reserved (acts as the Terminal key, exit 2). |
+| `question` | Full text. Printed in the terminal, and on the detail keys followed by the numbered options. |
+| `header` | 1-3 words. This is what the header key shows. |
+| `options` | 1-8 items. `label` on the key, `description` in the terminal and on the detail keys, optional `id` (default: the index) returned as `optionId`; `"terminal"` is reserved (acts as the Terminal key, exit 2). |
+| `detail` | Optional. What the detail keys show instead of the question and its options. |
 | `timeout` | Seconds, default 180. |
 | `context` | Top-left key. Defaults to the current directory's name. |
 
@@ -107,18 +108,20 @@ Anything other than 0 means *ask in the terminal instead* — never assume an an
 
 |  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|---|
-| **row 0** | context | question | — | — | — | queue | back | Terminal |
+| **row 0** | context | header | — | — | — | queue | back | Terminal |
 | **row 1** | detail 1 | detail 2 | detail 3 | detail 4 | detail 5 | detail 6 | detail 7 | detail 8 |
 | **row 2** | detail 9 | detail 10 | detail 11 | detail 12 | detail 13 | detail 14 | detail 15 | detail 16 |
 | **row 3** | option 1 | option 2 | option 3 | option 4 | option 5 | option 6 | option 7 | option 8 |
 
-Unused option keys go dark. With no question pending the whole page is idle:
+The sixteen detail keys are one text surface: the detail is wrapped at the width of a whole row (104 columns, 13 per key) and each key shows its own columns, so words run on from key to key. Two rows of six lines each; longer text ends in `…`. The header key's colour tells the kind: amber for a permission prompt, violet for a plan, blue for a question. The context key shows the project, and the session's name when the dashboard knows it. Unused option keys go dark.
 
-![The idle page](docs/deck-idle.png)
+A plan waiting for approval:
+
+![A plan on the deck](docs/deck-plan.png)
 
 ### Permission prompts
 
-The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser**, with the command's first words on the question key and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the full command in the terminal before pressing — three words on a key can't tell `git push` from `git push --force`.
+The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser**, with the command's first words on the header key, the call itself across the detail keys (a Bash command and its description, a file path with the first line of an edit, a URL, an MCP tool's input) and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the detail keys before pressing, not just the header — three words can't tell `git push` from `git push --force`. When the detail ends in `…`, the rest is in the terminal.
 
 Nothing shows with `--dangerously-skip-permissions`, which never asks. There is no "always allow" key. A prompt that arrives while another question is on the keys queues behind it.
 
@@ -144,11 +147,11 @@ Forces one page switch and reads the Stream Deck log. RED means the deck's contr
 
 A key is 72px. Labels are measured against real font metrics and auto-sized between 18px and 48px, wrapping onto up to three lines, but the honest ceiling is two or three short words.
 
-![Two options](docs/deck-two-options.png)
+![A question with three options](docs/deck-ask.png)
 
-Put the reasoning in `description`. You read that in the terminal while deciding; the key is just the button you press.
+Put the reasoning in `description`. You read that on the detail keys (and in the terminal) while deciding; the key is just the button you press.
 
-Do not use the deck for choices where exact wording matters — approving a specific shell command, confirming a destructive action. Three words cannot distinguish `git push` from `git push --force origin main`. Ask in the terminal for those.
+Do not put what the choice hinges on in a label — three words cannot distinguish `git push` from `git push --force origin main`. It belongs in the question or its descriptions, where the detail keys show it; if it is longer than two rows of them, ask in the terminal.
 
 ## Configuring the Elgato MCP server in Stream Deck
 
@@ -209,7 +212,7 @@ docs/                   dashboard reference notes + rendered key art for this RE
 
 ### About the images
 
-The images in this README are rendered from the plugin's own SVG key art with `rsvg-convert`, not photographed off the hardware. They are accurate about layout, sizing, and colour. Be aware that Stream Deck's renderer is stricter than `rsvg`: it honours neither per-`tspan` positioning nor `text-anchor`, which is why the renderer emits one `<text>` element per line with an explicit `x`.
+The images in this README are rendered from the plugin's own SVG key art with `@resvg/resvg-js` (`corepack pnpm docs:render` in `stream-deck/`), not photographed off the hardware. They are accurate about layout, sizing, and colour. Be aware that Stream Deck's renderer is stricter than resvg: it honours neither per-`tspan` positioning nor `text-anchor`, which is why the renderer emits one `<text>` element per line with an explicit `x`.
 
 ## Limitations
 

@@ -19,6 +19,7 @@ pnpm sd:link / sd:unlink           # (re)create the symlink into Plugins/
 bash ../scripts/probe-hooks.sh     # is the installed claude-deck Claude Code plugin registering every hook? (reads the real ~/.claude)
 pnpm icons:render       # regenerate icons/*.svg reference assets from src/icons/
 pnpm icons:static       # rasterize manifest PNGs from assets/svg/ via @resvg/resvg-js
+pnpm docs:render        # regenerate ../docs/deck-{permission,plan,ask}.png from the answer-key art
 ```
 
 There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, the assert-based `scripts/check-*.mts` (`pnpm exec tsx scripts/check-<name>.mts`), then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
@@ -48,7 +49,7 @@ State priority for an idle session: `awaiting_plan` > `awaiting` > plain `idle`.
 
 ### Answer keys (`src/ask/`)
 
-`claude-ask` writes one `questions/<id>.json` per question (tmp + rename) and polls `answers/<id>.json`; there is no lock. `queue.ts` watches `questions/` (fs.watch plus a 500 ms poll), drops malformed files, dead `pid`s and expired questions, and orders by `createdAt`. `controller.ts` is the SDK-free state machine (active question, dismissed set, which deck shows the "Claude Deck" profile); `ask.ts` binds it to the SDK; `actions.ts` holds the keys. A short press on a session key with a pending question brings that question up on the key's deck as well as focusing the terminal.
+`claude-ask` writes one `questions/<id>.json` per question (tmp + rename) and polls `answers/<id>.json`; there is no lock. `queue.ts` watches `questions/` (fs.watch plus a 500 ms poll), drops malformed files, dead `pid`s and expired questions, and orders by `createdAt`. `controller.ts` is the SDK-free state machine (active question, dismissed set, which deck shows the "Claude Deck" profile); `ask.ts` binds it to the SDK; `actions.ts` holds the keys, drawn by `render.ts`. `detail.ts` lays out the 16-key detail strip: the text is wrapped once at the row width, then each key takes its own 13 columns (no-break spaces keep them aligned); its size constants are first guesses awaiting a look at the hardware. A short press on a session key with a pending question brings that question up on the key's deck as well as focusing the terminal.
 
 ### Render pipeline (`src/render-loop.ts` + `src/icons/`)
 
