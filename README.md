@@ -3,7 +3,7 @@
 Claude Code on a Stream Deck XL, in two halves:
 
 - **Session dashboard**: one key per running `claude` session, colour = state. Press a key to bring that session's terminal to the front (the exact Warp pane, or VS Code). Plus plan usage keys (5 h, week, per model).
-- **Answer keys** (the rest): Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
+- **Answer keys** (the rest): Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Toujours** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
 
 ![A permission prompt on the deck](docs/deck-permission.png)
 
@@ -121,9 +121,9 @@ A plan waiting for approval:
 
 ### Permission prompts
 
-The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser**, with the command's first words on the header key, the call itself across the detail keys (a Bash command and its description, a file path with the first line of an edit, a URL, an MCP tool's input) and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the detail keys before pressing, not just the header — three words can't tell `git push` from `git push --force`. When the detail ends in `…`, the rest is in the terminal.
+The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser** — plus **Toujours** when Claude Code suggested a rule to remember — with the command's first words on the header key, the call itself across the detail keys (a Bash command and its description, a file path with the first line of an edit, a URL, an MCP tool's input) and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the detail keys before pressing, not just the header — three words can't tell `git push` from `git push --force`. When the detail ends in `…`, the rest is in the terminal.
 
-Nothing shows with `--dangerously-skip-permissions`, which never asks. There is no "always allow" key. A prompt that arrives while another question is on the keys queues behind it.
+The **Toujours** key stores Claude Code's own suggested rule (not the broader one the terminal offers), spelled out on the last detail line — `Toujours = Bash(python3 …) · localSettings` — and it only appears when the prompt carries such a suggestion. A plan is the exception: a hook can't approve one, so an `ExitPlanMode` prompt shows **Continuer à planifier** / **Approuver au terminal** instead. Nothing shows with `--dangerously-skip-permissions`, which never asks. A prompt that arrives while another question is on the keys queues behind it.
 
 ### Stuck deck
 
