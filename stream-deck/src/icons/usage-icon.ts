@@ -93,6 +93,25 @@ function untilText(resetsAtMs: number | undefined, now: number): string {
   return `resets in ${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
+const FIVE_MIN_MS = 5 * 60 * 1000;
+
+/** French 3-letter day names, in `Date.getDay()` order. Hardcoded rather than
+ *  taken from `Intl`: the deck's labels are French whatever the machine's
+ *  locale is, and this stays a pure string table. */
+const DAYS_FR = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+
+/** `14:30`, or `ven 10:15` on the weekly key where the projection can land days
+ *  away. Local wall clock, minutes rounded to 5: a projection only moves when a
+ *  new snapshot lands, and the rounding absorbs the small jitter between two
+ *  readings so the tile's SVG — and therefore the dedup in `usage-action.ts` —
+ *  stays put. Rounding the instant rather than the minutes number rolls
+ *  23:58 → 00:00 onto the next day, day name included, for free. */
+function clockText(ms: number, withDay: boolean): string {
+  const d = new Date(Math.round(ms / FIVE_MIN_MS) * FIVE_MIN_MS);
+  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return withDay ? `${DAYS_FR[d.getDay()]} ${hhmm}` : hhmm;
+}
+
 /** True while the window's reset is still ahead of us — the only condition
  *  under which a countdown means anything. */
 function hasFutureReset(resetsAtMs: number | undefined, now: number): boolean {
@@ -117,17 +136,34 @@ function placeholder(kind: UsageKind, line: string): string {
   ].join("\n"));
 }
 
+/** The bottom line of a single-window tile: when the burn rate runs the window
+ *  out, when there is an answer to that; otherwise the reset countdown, or the
+ *  snapshot's age when there is no reset left to count down to. */
+function singleFooter(kind: UsageKind, w: UsageWindow, snapshot: UsageSnapshot, now: number, accent: string): string {
+  // `accent` is red at this point — accentFor(>=90) — and nothing else on the
+  // key says the limit is spent rather than nearly spent.
+  if (w.percent >= 100) return footer("limite atteinte", accent);
+  const counting = hasFutureReset(w.resetsAtMs, now);
+  // A projection only means something inside a window that is still running:
+  // past the reset, the reading describes a window that no longer exists and
+  // how old it is becomes the only honest thing left to say.
+  if (counting && w.projectedLimitMs !== undefined) {
+    return footer(`limite ~${clockText(w.projectedLimitMs, kind === "seven_day")}`, accent);
+  }
+  return counting
+    ? footer(untilText(w.resetsAtMs, now), MUTED)
+    : footer(ageText(snapshot.fetchedAtMs, now), "#f59e0b");
+}
+
 function renderSingle(kind: UsageKind, w: UsageWindow, snapshot: UsageSnapshot, now: number): string {
   const accent = accentFor(w.percent);
   const age = now - snapshot.fetchedAtMs;
-  const counting = hasFutureReset(w.resetsAtMs, now);
-  const bottom = counting ? untilText(w.resetsAtMs, now) : ageText(snapshot.fetchedAtMs, now);
   return frame(accent, "0.95", [
     title(TITLES[kind], accent),
     age > AGING_MS ? staleDot() : "",
     `<text x="72" y="82" font-family="${MONO}" font-size="40" font-weight="700" fill="${accent}" text-anchor="middle">${Math.round(w.percent)}%</text>`,
     bar(18, 94, 108, 12, w.percent, accent),
-    footer(bottom, counting ? MUTED : "#f59e0b"),
+    singleFooter(kind, w, snapshot, now, accent),
   ].join("\n"));
 }
 

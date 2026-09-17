@@ -23,6 +23,10 @@ export interface UsageWindow {
   percent: number;
   /** Epoch ms at which the window resets; undefined when the server omits it. */
   resetsAtMs?: number;
+  /** Epoch ms at which this window's pace runs the limit out, when that lands
+   *  before the reset. Equal to `fetchedAtMs` once the limit is already hit.
+   *  See `projectLimit`. */
+  projectedLimitMs?: number;
 }
 
 /** A weekly window scoped to one model bucket (e.g. "Fable"). */
@@ -48,6 +52,76 @@ const NAMED_MODEL_WINDOWS: ReadonlyArray<readonly [string, string]> = [
   ["seven_day_opus", "Opus"],
   ["seven_day_sonnet", "Sonnet"],
 ];
+
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** How much of a window has to have gone by before its average pace is worth
+ *  extrapolating. `percent` is an integer, so early in a window one single
+ *  point of it is a huge relative step: at 5 minutes into the 5-hour window,
+ *  1% already "projects" to a limit 8 hours out, and 2% to 4 hours out. Ten
+ *  minutes is where that noise stops swamping the answer. */
+const MIN_ELAPSED_MS = 10 * 60 * 1000;
+
+export interface LimitProjectionInput {
+  /** Utilisation of the window, 0-100 (and occasionally past 100). */
+  percent: number;
+  /** Epoch ms of the reading `percent` comes from. */
+  fetchedAtMs: number;
+  /** Epoch ms at which the window resets. */
+  resetsAtMs?: number;
+  /** Nominal window length, used to derive its start from the reset. */
+  windowMs: number;
+  /** Window start as the server states it, when the payload carries one. */
+  startedAtMs?: number;
+}
+
+/**
+ * When the current pace runs this window's limit out, or undefined when that
+ * question has no useful answer yet.
+ *
+ * Deliberately stateless: the whole window is described by the snapshot itself
+ * (start, percentage, reading time), so the average pace needs no sample
+ * history — which means it survives a plugin restart and costs no memory. The
+ * price is that idle time counts: a burst happening right now is averaged
+ * against the hours you spent away, so the projection is optimistic while a
+ * burst is on. Sampling would not fix much either — `percent` is an integer and
+ * a new reading only lands every ~5.5 min, so consecutive samples differ by 0
+ * or 1.
+ */
+export function projectLimit({
+  percent,
+  fetchedAtMs,
+  resetsAtMs,
+  windowMs,
+  startedAtMs,
+}: LimitProjectionInput): number | undefined {
+  // Already there: the projection is "now", and the key says so rather than
+  // counting down to a limit that has stopped being in the future.
+  if (percent >= 100) return fetchedAtMs;
+  if (percent <= 0 || resetsAtMs === undefined) return undefined;
+  const t0 = startedAtMs ?? resetsAtMs - windowMs;
+  const elapsed = fetchedAtMs - t0;
+  if (elapsed < MIN_ELAPSED_MS) return undefined;
+  const limitAtMs = t0 + (elapsed * 100) / percent;
+  // A limit the reset beats is not a limit you will hit: the window empties
+  // first, and the countdown is the more useful thing to show.
+  return limitAtMs < resetsAtMs ? limitAtMs : undefined;
+}
+
+/** `toWindow` output plus its projection. Kept out of `toWindow` so the
+ *  per-model buckets (which have no window start, and no room on the key for a
+ *  projection anyway) stay exactly as they were. */
+function projected(
+  w: UsageWindow | undefined,
+  fetchedAtMs: number,
+  windowMs: number,
+  startedAtMs?: number,
+): UsageWindow | undefined {
+  if (!w) return undefined;
+  const projectedLimitMs = projectLimit({ percent: w.percent, fetchedAtMs, resetsAtMs: w.resetsAtMs, windowMs, startedAtMs });
+  return projectedLimitMs === undefined ? w : { ...w, projectedLimitMs };
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -112,10 +186,14 @@ function parseSnapshot(blob: unknown): UsageSnapshot | undefined {
   const u = asRecord(cached.utilization);
   if (typeof fetchedAtMs !== "number" || !u) return undefined;
 
+  // The weekly window states its own start; the 5-hour one doesn't, so it is
+  // derived from the reset (which the server rounds to the hour, making the
+  // derived start approximate by up to a minute — harmless at this resolution).
+  const weekStartedAtMs = parseResetsAt(asRecord(u.seven_day_breakdown)?.window_started_at);
   return {
     fetchedAtMs,
-    fiveHour: toWindow(u.five_hour),
-    sevenDay: toWindow(u.seven_day),
+    fiveHour: projected(toWindow(u.five_hour), fetchedAtMs, FIVE_HOUR_MS),
+    sevenDay: projected(toWindow(u.seven_day), fetchedAtMs, SEVEN_DAY_MS, weekStartedAtMs),
     modelScoped: collectModelScoped(u),
   };
 }
