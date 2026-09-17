@@ -49,7 +49,7 @@ const answer = (q, optionId) =>
 
 // --- two sessions at once, answered out of order --------------------------------
 const a = ask({ header: "A", sessionId: "sess-a", options: ["Oui", "Non"], timeout: 30 });
-const b = ask({ header: "B", options: [{ id: "keep", label: "Garder" }, { id: "drop", label: "Jeter", description: "d" }], timeout: 30 }, ["--session", "sess-b"]);
+const b = ask({ header: "B", question: "Keep the cache?", options: [{ id: "keep", label: "Garder" }, { id: "drop", label: "Jeter", description: "d" }], timeout: 30 }, ["--session", "sess-b"]);
 const qa = await questionOf("sess-a");
 const qb = await questionOf("sess-b");
 
@@ -61,6 +61,9 @@ assert.equal(qa.cwd, process.cwd());
 assert.deepEqual(qa.options, [{ id: "0", label: "Oui" }, { id: "1", label: "Non" }], "ids default to the index");
 assert.deepEqual(qb.options, [{ id: "keep", label: "Garder" }, { id: "drop", label: "Jeter", description: "d" }]);
 assert.equal(Date.parse(qa.expiresAt) - Date.parse(qa.createdAt), 30_000);
+// no detail given: the detail keys get the question with every option spelled out
+assert.equal(qa.detail, "1. Oui\n2. Non");
+assert.equal(qb.detail, "Keep the cache?\n\n1. Garder\n2. Jeter — d");
 
 answer(qb, "drop");
 const rb = await b.done;

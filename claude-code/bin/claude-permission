@@ -69,10 +69,43 @@ function resolvedElsewhere() {
   });
 }
 
-/** The full call, for the detail keys: the command itself for Bash, the input as JSON otherwise. */
-function detail({ tool_name: tool, tool_input: args }) {
-  if (tool === "Bash" && typeof args?.command === "string") return args.command;
-  return args ? JSON.stringify(args) : tool;
+const firstLine = (text) => (text.split("\n").find((l) => l.trim()) ?? "").trim();
+
+/** Edit/MultiEdit: the first line of what changes into the first line of what replaces it; Write: its size. */
+function editHint(tool, args) {
+  const edits = tool === "Edit" ? [args] : tool === "MultiEdit" && Array.isArray(args.edits) ? args.edits : [];
+  const [edit] = edits;
+  if (typeof edit?.old_string === "string" && typeof edit.new_string === "string") {
+    const more = edits.length > 1 ? ` (+${edits.length - 1} more)` : "";
+    return `${firstLine(edit.old_string)} → ${firstLine(edit.new_string)}${more}`;
+  }
+  if (tool === "Write" && typeof args.content === "string") {
+    const lines = args.content ? args.content.split("\n").length - (args.content.endsWith("\n") ? 1 : 0) : 0;
+    return `new file, ${lines} lines`;
+  }
+  return undefined;
+}
+
+/** The call spelled out across the detail keys (two rows of them), so the deck can be
+ *  answered without reading the terminal: the command, the file, the URL, the plan. */
+function detail({ tool_name: tool, tool_input: input }) {
+  const args = input && typeof input === "object" ? input : {};
+  // Heading markers are noise on a 13-column key; the text under them is the plan.
+  if (tool === "ExitPlanMode" && typeof args.plan === "string") return args.plan.replace(/^#{1,6}[ \t]+/gm, "");
+  if (tool === "Bash" && typeof args.command === "string") {
+    return typeof args.description === "string" && args.description ? `${args.command}\n\n${args.description}` : args.command;
+  }
+  const file = typeof args.file_path === "string" ? args.file_path : args.notebook_path;
+  if (typeof file === "string") {
+    const hint = editHint(tool, args);
+    return hint ? `${file}\n${hint}` : file;
+  }
+  if (tool === "WebFetch" && typeof args.url === "string") return args.url;
+  if (tool.startsWith("mcp__")) {
+    const [, server, ...name] = tool.split("__");
+    return `${server} › ${name.join("__")}\n${JSON.stringify(args)}`;
+  }
+  return input ? JSON.stringify(input) : tool;
 }
 
 /** Option id → hook decision. Answers are mapped by id, never by key position. */

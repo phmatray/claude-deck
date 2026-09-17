@@ -6,6 +6,7 @@
 //
 // stdin   JSON: { question, header?, detail?, kind?, sessionId?, options[], timeout?, context? }
 //         options: labels, or { id?, label, description? } (id defaults to the index)
+//         detail: the text across the deck's detail keys; defaults to the question and its options
 // stdout  JSON: { index, optionId, label, cancelled } on exit 0
 // exit    0 answered · 1 bad input · 2 answer in the terminal instead · 3 timed out, withdrawn or killed
 //
@@ -128,6 +129,8 @@ async function main() {
   // Answers are mapped back by option id, so two options sharing one would be indistinguishable.
   if (new Set(withIds.map((o) => o.id)).size !== withIds.length) fail("option ids must be unique");
 
+  // The option keys only have room for labels; the detail keys spell the options out.
+  const optionLines = withIds.map((o, i) => `${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}`);
   const createdAt = new Date();
   const timeoutMs = (spec.timeout == null ? 180 : spec.timeout) * 1000;
   const question = {
@@ -139,18 +142,16 @@ async function main() {
     // Shown on the top-left key so you can tell which session is asking.
     context: spec.context || path.basename(process.cwd()),
     header: spec.header || "Question",
-    ...(spec.detail != null && { detail: spec.detail }),
+    detail: spec.detail ?? [spec.question, optionLines.join("\n")].filter(Boolean).join("\n\n"),
     question: spec.question || "",
     options: withIds,
     createdAt: createdAt.toISOString(),
     expiresAt: new Date(createdAt.getTime() + timeoutMs).toISOString(),
   };
 
-  // The full text goes to the terminal; the keys only have room for the labels.
+  // The terminal gets the full text too: the detail keys clip what doesn't fit.
   process.stderr.write(`\n${question.question || question.header}\n`);
-  withIds.forEach((o, i) =>
-    process.stderr.write(`  ${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}\n`)
-  );
+  for (const line of optionLines) process.stderr.write(`  ${line}\n`);
   process.stderr.write("\nPress a key on the Stream Deck.\n");
 
   let answer = null;

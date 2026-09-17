@@ -83,8 +83,34 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
   const { askDir, done } = run(plan, home);
   const q = await waitQuestion(askDir);
   assert.equal(q.kind, "plan");
+  assert.equal(q.detail, "Plan\n1. x", "heading markers stripped");
   press(askDir, q, "deny");
   assert.equal(decision((await done).out).behavior, "deny");
+}
+
+// The detail keys spell out the call, per tool (a cancelled answer ends each run)
+{
+  const detailOf = async (tool_name, tool_input) => {
+    const { home } = session();
+    const { askDir, done } = run({ session_id: "s1", cwd: "/work/horizon-hub", tool_name, tool_input }, home);
+    const q = await waitQuestion(askDir);
+    writeFileSync(path.join(askDir, "answers", `${q.id}.json`), JSON.stringify({ id: q.id, cancelled: true, reason: "terminal" }));
+    await done;
+    return q.detail;
+  };
+  const cases = [
+    ["Bash", { command: "mkdir probe-x", description: "Create probe-x directory" }, "mkdir probe-x\n\nCreate probe-x directory"],
+    ["Edit", { file_path: "/w/a.ts", old_string: "\n  const a = 1;\n  return a;", new_string: "  const a = 2;" }, "/w/a.ts\nconst a = 1; → const a = 2;"],
+    ["MultiEdit", { file_path: "/w/a.ts", edits: [{ old_string: "x", new_string: "y" }, { old_string: "p", new_string: "q" }] }, "/w/a.ts\nx → y (+1 more)"],
+    ["Write", { file_path: "/w/notes.md", content: "a\nb\nc\n" }, "/w/notes.md\nnew file, 3 lines"],
+    ["Read", { file_path: "/w/a.ts" }, "/w/a.ts"],
+    ["NotebookEdit", { notebook_path: "/w/n.ipynb", new_source: "x" }, "/w/n.ipynb"],
+    ["WebFetch", { url: "https://example.com/docs", prompt: "summarize" }, "https://example.com/docs"],
+    ["mcp__github__create_issue", { title: "Bug" }, 'github › create_issue\n{"title":"Bug"}'],
+    ["WebSearch", { query: "stream deck xl" }, '{"query":"stream deck xl"}'],
+  ];
+  const got = await Promise.all(cases.map(([tool, input]) => detailOf(tool, input)));
+  assert.deepEqual(got, cases.map((c) => c[2]));
 }
 
 // Refuser → deny
