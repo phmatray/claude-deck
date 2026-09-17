@@ -67,8 +67,9 @@ stream rather than from sidecar files and mtimes.
 
 Register every event **catch-all** (`"matcher": ""`), never scoped to a tool: the awaiting
 flags below are cleared by the *next* tool event of the turn, whatever tool that is, so a
-`"matcher": "ExitPlanMode"` entry would set a state it can never clear. The hook stdin is
-JSON:
+`"matcher": "ExitPlanMode"` entry would leave the permission flag lit until `Stop` — and a
+consumer checking its own config should read a tool-scoped matcher as *not registered*
+(`stream-deck/src/hook-check.ts`). The hook stdin is JSON:
 
 ```json
 {
