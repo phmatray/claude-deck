@@ -1,98 +1,25 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { initWarpCwdNormalizer, normalizeWarpCwd } from "./warp-cwd.js";
 import { spawnCapture } from "./spawn-capture.js";
 
 /**
  * Warp stores per-pane cwd + per-tab/window structure in a sqlite DB under
  * its per-user app data. Reading it (read-only, WAL-safe via
  * `sqlite3 -readonly`) lets us recover `(window_id, tab_index)` for a given
- * cwd — Warp doesn't expose this via any IPC surface (no AX content on
- * macOS, no URL action verb on Windows pending upstream PR).
+ * cwd — Warp exposes no IPC surface for it (no AX content, no URL verb that
+ * focuses a tab by cwd).
  *
- * Stable / Preview / Beta channels all ship the same Diesel-managed schema.
+ * Stable and Preview ship the same Diesel-managed schema.
  */
-function dbCandidates(): string[] {
-  if (process.platform === "darwin") {
-    const groupRoot = join(homedir(), "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support");
-    return [
-      join(groupRoot, "dev.warp.Warp-Stable/warp.sqlite"),
-      join(groupRoot, "dev.warp.Warp-Preview/warp.sqlite"),
-    ];
-  }
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (!localAppData) return [];
-    return [
-      join(localAppData, "warp", "Warp", "data", "warp.sqlite"),
-      join(localAppData, "warp.preview", "Warp", "data", "warp.sqlite"),
-      join(localAppData, "warp.beta", "Warp", "data", "warp.sqlite"),
-    ];
-  }
-  return [];
-}
+const GROUP_ROOT = join(homedir(), "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support");
+const DB_CANDIDATES = [
+  join(GROUP_ROOT, "dev.warp.Warp-Stable/warp.sqlite"),
+  join(GROUP_ROOT, "dev.warp.Warp-Preview/warp.sqlite"),
+];
 
-/**
- * Locate a `sqlite3` executable usable from the plugin process.
- *
- * macOS / Linux: the system binary at `/usr/bin/sqlite3` is part of the OS.
- *
- * Windows: there's no system binary. We probe (in order) WinGet's per-user
- * shim dir, Git for Windows' bundled sqlite, then the WinGet package install
- * dir directly. If everything fails we still return the bare `sqlite3.exe`
- * name and let `spawn` resolve it via PATH — surfaces a clear `spawn` error
- * back to the caller if even that's missing.
- *
- * Result is memoized: install path doesn't change at runtime, and probing
- * (existsSync × ~5 + readdirSync) was happening on every key press.
- *
- * Returns `null` only on platforms where neither path applies.
- */
-let cachedSqliteExec: string | null | undefined;
-
-function findSqliteExec(): string | null {
-  if (cachedSqliteExec !== undefined) return cachedSqliteExec;
-  cachedSqliteExec = resolveSqliteExec();
-  return cachedSqliteExec;
-}
-
-function resolveSqliteExec(): string | null {
-  if (process.platform === "darwin" || process.platform === "linux") {
-    return "/usr/bin/sqlite3";
-  }
-  if (process.platform !== "win32") return null;
-
-  const localAppData = process.env.LOCALAPPDATA ?? "";
-  const programFiles = process.env["ProgramFiles"] ?? "C:\\Program Files";
-
-  const candidates: string[] = [
-    join(localAppData, "Microsoft", "WinGet", "Links", "sqlite3.exe"),
-    join(programFiles, "Git", "usr", "bin", "sqlite3.exe"),
-    join(programFiles, "Git", "mingw64", "bin", "sqlite3.exe"),
-  ];
-
-  // The WinGet shim above only exists once the user's PATH has been refreshed
-  // post-install. Probe the package install dir directly as a fallback.
-  const wingetPkgs = join(localAppData, "Microsoft", "WinGet", "Packages");
-  if (existsSync(wingetPkgs)) {
-    try {
-      for (const entry of readdirSync(wingetPkgs)) {
-        if (entry.startsWith("SQLite.SQLite_")) {
-          candidates.push(join(wingetPkgs, entry, "sqlite3.exe"));
-        }
-      }
-    } catch {
-      // readdir can race with WinGet updates — fall through to PATH lookup.
-    }
-  }
-
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  // Last resort: trust PATH. `spawn` will surface ENOENT if it's not there.
-  return "sqlite3.exe";
-}
+/** Ships with macOS. */
+const SQLITE = "/usr/bin/sqlite3";
 
 export interface WarpPaneRow {
   windowId: number;
@@ -113,11 +40,8 @@ export type WarpDbResult =
   | { ok: false; error: string };
 
 export async function readWarpPanes(): Promise<WarpDbResult> {
-  const db = dbCandidates().find((p) => existsSync(p));
+  const db = DB_CANDIDATES.find((p) => existsSync(p));
   if (!db) return { ok: false, error: "warp-db-not-found" };
-
-  const exec = findSqliteExec();
-  if (!exec) return { ok: false, error: "sqlite-exec-not-found" };
 
   // Two result blocks separated by a SECTION marker row, run in one sqlite3
   // invocation. SQL passed as a CLI arg (NOT via stdin) so `-separator $'\t'`
@@ -139,20 +63,18 @@ export async function readWarpPanes(): Promise<WarpDbResult> {
     "SELECT 'WINDOWS';" +
     "SELECT w.id, w.active_tab_index, (SELECT COUNT(*) FROM tabs WHERE window_id = w.id) FROM windows w;";
 
-  const r = await spawnCapture(exec, ["-readonly", "-separator", "\t", db, sql], { timeoutMs: 1500 });
+  const r = await spawnCapture(SQLITE, ["-readonly", "-separator", "\t", db, sql], { timeoutMs: 1500 });
   if (r.timedOut) return { ok: false, error: "timeout" };
   if (r.err) return { ok: false, error: `spawn: ${r.err}` };
   if (r.code !== 0) return { ok: false, error: r.stderr.trim() || `exit-${r.code}` };
   try {
-    return { ok: true, snapshot: await parseSnapshot(r.stdout) };
+    return { ok: true, snapshot: parseSnapshot(r.stdout) };
   } catch (err) {
     return { ok: false, error: `parse: ${(err as Error).message}` };
   }
 }
 
-async function parseSnapshot(stdout: string): Promise<WarpSnapshot> {
-  await initWarpCwdNormalizer();
-
+function parseSnapshot(stdout: string): WarpSnapshot {
   const panes: WarpPaneRow[] = [];
   const activeTabByWindow = new Map<number, number>();
   const tabCountByWindow = new Map<number, number>();
@@ -167,7 +89,7 @@ async function parseSnapshot(stdout: string): Promise<WarpSnapshot> {
       const w = parseInt(parts[0], 10);
       const t = parseInt(parts[1], 10);
       if (Number.isInteger(w) && Number.isInteger(t)) {
-        panes.push({ windowId: w, tabIndex: t, paneCwd: normalizeWarpCwd(parts.slice(2).join("\t")) });
+        panes.push({ windowId: w, tabIndex: t, paneCwd: parts.slice(2).join("\t") });
       }
     } else if (section === "WINDOWS" && parts.length >= 3) {
       const w = parseInt(parts[0], 10);

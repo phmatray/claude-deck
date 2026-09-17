@@ -1,28 +1,10 @@
-import { platform } from "node:os";
 import { focusWarpTabOnMac } from "./warp-focus-mac.js";
-import { focusWarpTabOnWin } from "./warp-focus-win.js";
 import { spawnCapture } from "./spawn-capture.js";
 
 /** Outcome of attempting to focus a Warp tab matching a session's cwd. */
 export interface WarpFocusResult {
   matched: boolean;
   reason: string;
-}
-
-/**
- * Dispatch to the platform-specific Warp tab focus implementation. Callers
- * treat the operation as best-effort, so platforms without an implementation
- * (Linux, etc.) get a no-op result rather than an error.
- */
-export async function focusWarpTabForCwd(cwd: string): Promise<WarpFocusResult> {
-  switch (platform()) {
-    case "darwin":
-      return focusWarpTabOnMac(cwd);
-    case "win32":
-      return focusWarpTabOnWin(cwd);
-    default:
-      return { matched: false, reason: "unsupported-platform" };
-  }
 }
 
 /** Where a session runs, as far as the hooks could tell. */
@@ -42,14 +24,14 @@ export interface FocusTarget {
  * cwd → tab heuristic.
  */
 export async function focusSession(target: FocusTarget): Promise<WarpFocusResult> {
-  if (target.warpSession && platform() === "darwin") {
+  if (target.warpSession) {
     return openUrl(`warp://session/${target.warpSession}`);
   }
-  if (target.termProgram === "vscode" && platform() === "darwin") {
+  if (target.termProgram === "vscode") {
     const r = await spawnCapture("/usr/bin/open", ["-a", "Visual Studio Code", target.cwd]);
     return r.code === 0 ? { matched: true, reason: "vscode window" } : { matched: false, reason: `vscode-open-failed: ${r.err ?? r.stderr.trim()}` };
   }
-  return focusWarpTabForCwd(target.cwd);
+  return focusWarpTabOnMac(target.cwd);
 }
 
 async function openUrl(url: string): Promise<WarpFocusResult> {

@@ -24,8 +24,8 @@ export interface CaptureOptions {
 /**
  * Spawn a child, capture stdout+stderr, optionally with a stdin payload and a
  * kill-after timeout. Resolves on close OR spawn-error OR timeout — never
- * rejects. Used everywhere the plugin shells out (wsl.exe, tasklist, sqlite3,
- * osascript, powershell, clipboard tools).
+ * rejects. Used everywhere the plugin shells out (sqlite3, osascript, open,
+ * the claude CLI).
  */
 export function spawnCapture(
   cmd: string,
