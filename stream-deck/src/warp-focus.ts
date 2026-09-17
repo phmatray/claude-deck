@@ -34,7 +34,9 @@ export async function focusSession(target: FocusTarget): Promise<WarpFocusResult
   return focusWarpTabOnMac(target.cwd);
 }
 
-async function openUrl(url: string): Promise<WarpFocusResult> {
+/** `open <url>`, as a focus result. Shared with the launcher key, which opens
+ *  `warp://tab_config/…` the same way. */
+export async function openUrl(url: string): Promise<WarpFocusResult> {
   const r = await spawnCapture("/usr/bin/open", [url]);
   return r.code === 0 ? { matched: true, reason: url } : { matched: false, reason: `open-failed: ${r.err ?? r.stderr.trim()}` };
 }

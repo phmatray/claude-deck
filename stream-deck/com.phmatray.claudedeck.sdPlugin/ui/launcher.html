@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Claude Launcher</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      padding: 14px 16px;
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #d4d4d4;
+      background: #2d2d2d;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5e7eb;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    section { margin-top: 14px; }
+    section:first-of-type { margin-top: 0; }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    p { margin: 0 0 8px; color: #9ca3af; font-size: 12px; }
+    label { display: block; margin-bottom: 4px; color: #9ca3af; font-size: 12px; }
+    input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 7px 10px;
+      border: 1px solid #4a4a4a;
+      border-radius: 4px;
+      background: #3a3a3a;
+      color: #f3f4f6;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+      font-size: 12px;
+    }
+    input[type="text"]:focus { outline: none; border-color: #6b7280; }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      color: #d4d4d4;
+      font-size: 12px;
+    }
+    .check input { margin: 0; }
+    .hint {
+      margin-top: 12px;
+      padding: 8px 10px;
+      background: #1f2937;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    code { color: #fde68a; }
+  </style>
+</head>
+<body>
+  <h2>Claude Launcher</h2>
+
+  <section>
+    <h3>Project</h3>
+    <label for="directory">Directory (absolute, or <code>~/…</code>)</label>
+    <input type="text" id="directory" placeholder="~/repo/my-project" spellcheck="false" />
+    <p>Pressing the key opens a Warp tab here and runs the command below.</p>
+  </section>
+
+  <section>
+    <h3>Key</h3>
+    <label for="label">Label (optional — defaults to the folder name)</label>
+    <input type="text" id="label" placeholder="my-project" spellcheck="false" />
+  </section>
+
+  <section>
+    <h3>Warp</h3>
+    <label for="command">Command</label>
+    <input type="text" id="command" placeholder="claude" spellcheck="false" />
+    <div class="check">
+      <input type="checkbox" id="newWindow" />
+      <label for="newWindow" style="margin:0">Open a new window instead of a tab</label>
+    </div>
+  </section>
+
+  <div class="hint">
+    Saving writes <code>~/.warp/tab_configs/claude_deck_&lt;slug&gt;.toml</code>, which also shows up
+    in Warp's <code>+</code> menu. Changing the directory leaves the previous file behind — delete it
+    there if it bothers you.
+  </div>
+
+  <script>
+    // Raw WebSocket, like ui/setup.html: the SDK's PI library would be a second
+    // bundle to build for four fields.
+    let ws;
+    let actionContext;
+    const FIELDS = ["directory", "label", "command"];
+    let settings = {};
+
+    function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, _inInfo, inActionInfo) {
+      actionContext = inUUID;
+      try {
+        // The current settings ride along with actionInfo, so the form seeds
+        // itself without a getSettings round-trip.
+        settings = JSON.parse(inActionInfo)?.payload?.settings ?? {};
+      } catch (err) {
+        console.error("launcher PI: bad actionInfo", err);
+      }
+      fill();
+      ws = new WebSocket("ws://127.0.0.1:" + inPort);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ event: inRegisterEvent, uuid: actionContext }));
+      };
+    }
+
+    function fill() {
+      for (const id of FIELDS) document.getElementById(id).value = settings[id] ?? "";
+      document.getElementById("newWindow").checked = settings.newWindow === true;
+    }
+
+    // setSettings replaces the whole object, so every field goes on every save.
+    function save() {
+      if (!ws || ws.readyState !== 1) return;
+      settings = {
+        directory: document.getElementById("directory").value.trim(),
+        label: document.getElementById("label").value.trim(),
+        command: document.getElementById("command").value.trim(),
+        newWindow: document.getElementById("newWindow").checked,
+      };
+      ws.send(JSON.stringify({ event: "setSettings", context: actionContext, payload: settings }));
+    }
+
+    for (const id of FIELDS) {
+      const el = document.getElementById(id);
+      // "change" alone would leave the key stale until focus moves elsewhere,
+      // and the panel is often closed straight after typing.
+      el.addEventListener("change", save);
+      el.addEventListener("blur", save);
+    }
+    document.getElementById("newWindow").addEventListener("change", save);
+  </script>
+</body>
+</html>

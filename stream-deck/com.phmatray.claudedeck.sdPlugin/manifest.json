@@ -123,6 +123,7 @@
       "Name": "Claude Launcher",
       "UUID": "com.phmatray.claudedeck.launcher",
       "Icon": "imgs/actions/launcher/icon",
+      "PropertyInspectorPath": "ui/launcher.html",
       "Tooltip": "Open Claude Code in a chosen directory, in a new Warp tab.",
       "Controllers": [
         "Keypad"
