@@ -79,11 +79,11 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
 // dashboard keeps awaiting_plan rather than the permission state
 {
   const { home } = session();
-  const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
+  const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x\n## Step 2\nfix issue #42\n#hashtag stays", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
   const { askDir, done } = run(plan, home);
   const q = await waitQuestion(askDir);
   assert.equal(q.kind, "plan");
-  assert.equal(q.detail, "Plan\n1. x", "heading markers stripped");
+  assert.equal(q.detail, "Plan\n1. x\nStep 2\nfix issue #42\n#hashtag stays", "heading markers stripped on every line, other # kept");
   press(askDir, q, "deny");
   assert.equal(decision((await done).out).behavior, "deny");
 }
@@ -96,21 +96,27 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
     const q = await waitQuestion(askDir);
     writeFileSync(path.join(askDir, "answers", `${q.id}.json`), JSON.stringify({ id: q.id, cancelled: true, reason: "terminal" }));
     await done;
-    return q.detail;
+    return q;
   };
   const cases = [
     ["Bash", { command: "mkdir probe-x", description: "Create probe-x directory" }, "mkdir probe-x\n\nCreate probe-x directory"],
     ["Edit", { file_path: "/w/a.ts", old_string: "\n  const a = 1;\n  return a;", new_string: "  const a = 2;" }, "/w/a.ts\nconst a = 1; → const a = 2;"],
     ["MultiEdit", { file_path: "/w/a.ts", edits: [{ old_string: "x", new_string: "y" }, { old_string: "p", new_string: "q" }] }, "/w/a.ts\nx → y (+1 more)"],
+    ["Edit", { file_path: "/w/a.ts", old_string: "foo", new_string: "" }, '/w/a.ts\nfoo → ""'],
     ["Write", { file_path: "/w/notes.md", content: "a\nb\nc\n" }, "/w/notes.md\nnew file, 3 lines"],
+    ["Write", { file_path: "/w/one.txt", content: "single line" }, "/w/one.txt\nnew file, 1 line"],
     ["Read", { file_path: "/w/a.ts" }, "/w/a.ts"],
     ["NotebookEdit", { notebook_path: "/w/n.ipynb", new_source: "x" }, "/w/n.ipynb"],
     ["WebFetch", { url: "https://example.com/docs", prompt: "summarize" }, "https://example.com/docs"],
     ["mcp__github__create_issue", { title: "Bug" }, 'github › create_issue\n{"title":"Bug"}'],
+    // an MCP tool with a file_path is still an MCP call: server, tool and the whole input
+    ["mcp__filesystem__write_file", { file_path: "/w/secrets.env", content: "TOKEN=abc" }, 'filesystem › write_file\n{"file_path":"/w/secrets.env","content":"TOKEN=abc"}', "write_file secrets.env"],
+    ["mcp__srv__ns__do", { k: 1 }, 'srv › ns__do\n{"k":1}'],
     ["WebSearch", { query: "stream deck xl" }, '{"query":"stream deck xl"}'],
   ];
   const got = await Promise.all(cases.map(([tool, input]) => detailOf(tool, input)));
-  assert.deepEqual(got, cases.map((c) => c[2]));
+  assert.deepEqual(got.map((q) => q.detail), cases.map((c) => c[2]));
+  cases.forEach((c, i) => c[3] && assert.equal(got[i].header, c[3], `${c[0]} header`));
 }
 
 // Refuser → deny

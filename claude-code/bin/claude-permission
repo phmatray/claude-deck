@@ -28,14 +28,15 @@ function header({ tool_name: tool, tool_input: args = {} }) {
   if (tool === "Bash" && typeof args.command === "string") {
     return args.command.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 28);
   }
-  if (typeof args.file_path === "string") return `${tool} ${path.basename(args.file_path)}`;
-  if (typeof args.notebook_path === "string") return `${tool} ${path.basename(args.notebook_path)}`;
+  const name = tool.startsWith("mcp__") ? tool.split("__").pop() : tool;
+  if (typeof args.file_path === "string") return `${name} ${path.basename(args.file_path)}`;
+  if (typeof args.notebook_path === "string") return `${name} ${path.basename(args.notebook_path)}`;
   if (typeof args.url === "string") {
     try {
-      return `${tool} ${new URL(args.url).hostname}`;
+      return `${name} ${new URL(args.url).hostname}`;
     } catch {}
   }
-  return tool.startsWith("mcp__") ? tool.split("__").pop() : tool;
+  return name;
 }
 
 const eventLog = input.session_id
@@ -77,11 +78,12 @@ function editHint(tool, args) {
   const [edit] = edits;
   if (typeof edit?.old_string === "string" && typeof edit.new_string === "string") {
     const more = edits.length > 1 ? ` (+${edits.length - 1} more)` : "";
-    return `${firstLine(edit.old_string)} → ${firstLine(edit.new_string)}${more}`;
+    // An empty replacement is a deletion; a bare "foo →" would read as cut off.
+    return `${firstLine(edit.old_string)} → ${firstLine(edit.new_string) || '""'}${more}`;
   }
   if (tool === "Write" && typeof args.content === "string") {
     const lines = args.content ? args.content.split("\n").length - (args.content.endsWith("\n") ? 1 : 0) : 0;
-    return `new file, ${lines} lines`;
+    return `new file, ${lines} line${lines === 1 ? "" : "s"}`;
   }
   return undefined;
 }
@@ -95,16 +97,17 @@ function detail({ tool_name: tool, tool_input: input }) {
   if (tool === "Bash" && typeof args.command === "string") {
     return typeof args.description === "string" && args.description ? `${args.command}\n\n${args.description}` : args.command;
   }
+  // Before the file branch: an MCP tool taking a file_path still needs its name and full input shown.
+  if (tool.startsWith("mcp__")) {
+    const [, server, ...name] = tool.split("__");
+    return `${server} › ${name.join("__")}\n${JSON.stringify(args)}`;
+  }
   const file = typeof args.file_path === "string" ? args.file_path : args.notebook_path;
   if (typeof file === "string") {
     const hint = editHint(tool, args);
     return hint ? `${file}\n${hint}` : file;
   }
   if (tool === "WebFetch" && typeof args.url === "string") return args.url;
-  if (tool.startsWith("mcp__")) {
-    const [, server, ...name] = tool.split("__");
-    return `${server} › ${name.join("__")}\n${JSON.stringify(args)}`;
-  }
   return input ? JSON.stringify(input) : tool;
 }
 
