@@ -7,7 +7,6 @@ import streamDeck, {
   WillDisappearEvent,
   type KeyAction,
 } from "@elgato/streamdeck";
-import type { SessionOrigin } from "./sessions.js";
 import { focusSession, type FocusTarget } from "./warp-focus.js";
 
 /** Hold ≥ this long → wipe just this agent's event log (palier 1). */
@@ -22,7 +21,6 @@ export interface SlotState {
   lastSvg?: string;
   /** Bound session — used by long-press to wipe just this agent's event log. */
   sessionId?: string;
-  origin?: SessionOrigin;
   /** Bound session pid — required to kill the process on a ≥3s hold. */
   pid?: number;
   /** Bound session label, refreshed every tick by the render loop. */
@@ -62,8 +60,8 @@ export class SlotAction extends SingletonAction {
   private readonly killTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
-    private readonly resetSlot: (sessionId: string, origin: SessionOrigin) => Promise<void>,
-    private readonly killSlot: (pid: number, sessionId: string, origin: SessionOrigin) => Promise<void>,
+    private readonly resetSlot: (sessionId: string) => Promise<void>,
+    private readonly killSlot: (pid: number, sessionId: string) => Promise<void>,
   ) {
     super();
   }
@@ -99,7 +97,7 @@ export class SlotAction extends SingletonAction {
 
   override onKeyDown(ev: KeyDownEvent): void {
     const slot = this.state.get(ev.action.id);
-    if (!slot?.sessionId || !slot.origin || slot.pid === undefined) {
+    if (!slot?.sessionId || slot.pid === undefined) {
       // Empty slot — keep the "nothing to do here" feedback. No timer armed, so
       // KeyUp is also a no-op.
       void ev.action.showAlert();
@@ -107,7 +105,6 @@ export class SlotAction extends SingletonAction {
     }
     const id = ev.action.id;
     const sessionId = slot.sessionId;
-    const origin = slot.origin;
     const pid = slot.pid;
     // Freeze what the key was showing at press time — the render loop rewrites
     // `label` every tick as the ordering shifts under us.
@@ -122,7 +119,7 @@ export class SlotAction extends SingletonAction {
       // Palier 1 atteint : wipe le log. L'anneau "KILL" ne s'arme que si un kill
       // peut effectivement suivre.
       if (killable) slot.killArmingSince = Date.now();
-      void this.runLongPress(ev, sessionId, origin);
+      void this.runLongPress(ev, sessionId);
     }, LONG_PRESS_MS);
     this.pressTimers.set(id, wipeTimer);
     if (killable) {
@@ -131,7 +128,7 @@ export class SlotAction extends SingletonAction {
         // Garde killArmingSince posé pendant le kill pour que l'anneau s'affiche
         // plein (progress clampé à 1) le temps du SIGTERM, puis le libère — sinon
         // le dernier frame visible plafonne à ~0.95 avant de disparaître.
-        void this.runKill(ev, pid, sessionId, origin).finally(() => {
+        void this.runKill(ev, pid, sessionId).finally(() => {
           slot.killArmingSince = undefined;
         });
       }, KILL_PRESS_MS);
@@ -182,35 +179,26 @@ export class SlotAction extends SingletonAction {
     if (!res.matched) await ev.action.showAlert();
   }
 
-  private async runLongPress(
-    ev: KeyDownEvent,
-    sessionId: string,
-    origin: SessionOrigin,
-  ): Promise<void> {
+  private async runLongPress(ev: KeyDownEvent, sessionId: string): Promise<void> {
     try {
-      await this.resetSlot(sessionId, origin);
+      await this.resetSlot(sessionId);
       // Pendant l'armement du kill (cas normal d'un long-press), l'anneau rouge
       // sert de confirmation : on évite le flash vert showOk qui le masquerait
       // et laisserait croire que l'action est terminée.
       const slot = this.state.get(ev.action.id);
       if (!slot?.killArmingSince) await ev.action.showOk();
     } catch (err) {
-      streamDeck.logger.error(`long-press reset failed for ${origin}/${sessionId}`, err);
+      streamDeck.logger.error(`long-press reset failed for ${sessionId}`, err);
       await ev.action.showAlert();
     }
   }
 
-  private async runKill(
-    ev: KeyDownEvent,
-    pid: number,
-    sessionId: string,
-    origin: SessionOrigin,
-  ): Promise<void> {
+  private async runKill(ev: KeyDownEvent, pid: number, sessionId: string): Promise<void> {
     try {
-      await this.killSlot(pid, sessionId, origin);
+      await this.killSlot(pid, sessionId);
       await ev.action.showOk();
     } catch (err) {
-      streamDeck.logger.error(`kill failed for ${origin}/${sessionId} pid=${pid}`, err);
+      streamDeck.logger.error(`kill failed for ${sessionId} pid=${pid}`, err);
       await ev.action.showAlert();
     }
   }

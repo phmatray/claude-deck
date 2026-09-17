@@ -4,7 +4,6 @@ import {
   deriveState,
   pruneDeadSessions,
   readAllSessions,
-  SESSION_SOURCES,
   lastReadError,
   type SessionInfo,
 } from "./sessions.js";
@@ -81,8 +80,7 @@ export function createStateTracker() {
    */
   async function tick(actionCount: number): Promise<DisplayEntry[]> {
     const sessions = await readAllSessions();
-    const livenessResult = await filterLiveSessions(sessions);
-    const live = livenessResult.live;
+    const live = filterLiveSessions(sessions);
     const liveEntries: DisplayEntry[] = sessions
       .filter((s) => live.has(s.sessionId))
       .map((session) => ({ session, state: deriveState(session, true) }));
@@ -114,7 +112,7 @@ export function createStateTracker() {
 
     // Delete dead-process session files so the source dir stays bounded — left
     // unchecked they pile up (months of <pid>.json) and every one gets re-stat'd
-    // each tick over the slow UNC. Snapshots for the finished-TTL carry-over are
+    // each tick. Snapshots for the finished-TTL carry-over are
     // already held in recentlyFinished, so removing the file here is safe.
     const pruned = await pruneDeadSessions(sessions, live, Date.now());
     if (pruned > 0) streamDeck.logger.info(`pruned ${pruned} dead session file(s)`);
@@ -126,7 +124,7 @@ export function createStateTracker() {
     // group, where its now-newest event keeps it exactly where it was.
     // Ties are broken explicitly: sessions restored together (e.g. an editor
     // reopening its threads) share a SessionStart ts to the millisecond, and
-    // leaning on sort stability there would hand the order to readOneSource's
+    // leaning on sort stability there would hand the order to readSessionFiles's
     // Promise.all push order — which varies per tick and would repaint every
     // key for nothing.
     sortedEntries = [...liveEntries, ...recentlyFinished.values()].sort(
@@ -154,12 +152,9 @@ export function createStateTracker() {
       .slice(viewOffset, viewOffset + actionCount)
       .map((e, i) => ({ ...e, slotNumber: viewOffset + i + 1 }));
 
-    const sourceList = SESSION_SOURCES.map((s) => s.origin).join("+");
     maybeLog(
-      `tick: sources=${sourceList} sessions=${sessions.length} live=${live.size}` +
-        (livenessResult.fromCache ? " (cached)" : "") +
+      `tick: sessions=${sessions.length} live=${live.size}` +
         ` actions=${actionCount} view=${viewOffset}/${sortedEntries.length}` +
-        (livenessResult.error ? ` livenessError="${livenessResult.error}"` : "") +
         (lastReadError ? ` readError=${lastReadError}` : ""),
     );
 

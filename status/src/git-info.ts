@@ -1,6 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { localPathForOrigin, type PathOrigin } from "./env.js";
 
 /**
  * Resolves "which repo / which branch" for a session cwd by reading git's own
@@ -27,29 +26,21 @@ const NONE: GitInfo = {};
 /** How far up from cwd we look for `.git` before giving up. */
 const MAX_DEPTH = 40;
 
-/** Absolute in *either* namespace: POSIX `/x`, Windows `D:\x`, or a UNC `\\x`. */
-const isAbsoluteAnywhere = (p: string) => /^([A-Za-z]:[\\/]|[\\/])/.test(p);
-
 interface RepoEntry {
-  /** Path to this worktree's git dir, in local form. */
+  /** Path to this worktree's git dir. */
   headPath: string;
   repo: string;
 }
 
-/** (origin, cwd) → resolved repo, or null when cwd isn't in a repo we can reach.
- *  A repo never moves under a live session, so entries only drop when the session
- *  goes away (see pruneGitCache). Keyed by origin too, for the same reason the
- *  caches in sessions.ts key on full path: the two namespaces can report the same
- *  string for different directories. The value is the in-flight promise rather
- *  than the result, so two sessions sharing a worktree walk the tree once — on
- *  Windows that walk is up to MAX_DEPTH round-trips over the UNC. */
+/** cwd → resolved repo, or null when cwd isn't in a repo we can reach. A repo
+ *  never moves under a live session, so entries only drop when the session goes
+ *  away (see pruneGitCache). The value is the in-flight promise rather than the
+ *  result, so two sessions sharing a worktree walk the tree once. */
 const repoCache = new Map<string, Promise<RepoEntry | null>>();
-
-const cacheKey = (cwd: string, origin: PathOrigin) => `${origin}:${cwd}`;
 
 /** headPath → parsed branch, gated on (mtimeMs, size) exactly like the caches in
  *  sessions.ts: HEAD changes only on checkout, so re-parsing it every tick is
- *  pure waste — and on Windows it's a round-trip over the slow UNC. */
+ *  pure waste. */
 interface HeadEntry {
   mtimeMs: number;
   size: number;
@@ -58,7 +49,7 @@ interface HeadEntry {
 const headCache = new Map<string, HeadEntry>();
 
 /** Reads `gitdir:` out of a `.git` *file* (linked worktree / submodule). */
-async function readGitDirPointer(dotGit: string, dir: string, origin: PathOrigin): Promise<string | undefined> {
+async function readGitDirPointer(dotGit: string, dir: string): Promise<string | undefined> {
   let txt: string;
   try {
     txt = await readFile(dotGit, "utf8");
@@ -67,16 +58,13 @@ async function readGitDirPointer(dotGit: string, dir: string, origin: PathOrigin
   }
   const m = /^gitdir:\s*(.+?)\s*$/m.exec(txt);
   if (!m) return undefined;
-  // An absolute pointer is written in the *session's* namespace (a WSL worktree
-  // records `/home/u/…` even when we're reading it from Windows), so it has to
-  // go back through the same translation as the cwd. A relative one is already
-  // anchored to `dir`, which is local form by then.
-  return isAbsoluteAnywhere(m[1]) ? localPathForOrigin(m[1], origin) : resolve(dir, m[1]);
+  // `resolve` keeps an absolute pointer as-is and anchors a relative one to `dir`.
+  return resolve(dir, m[1]);
 }
 
-/** Walks up from `localCwd` to the first `.git`, then resolves the main repo root. */
-async function resolveRepo(localCwd: string, origin: PathOrigin): Promise<RepoEntry | null> {
-  let dir = localCwd;
+/** Walks up from `cwd` to the first `.git`, then resolves the main repo root. */
+async function resolveRepo(cwd: string): Promise<RepoEntry | null> {
+  let dir = cwd;
   for (let depth = 0; depth < MAX_DEPTH; depth++) {
     const dotGit = join(dir, ".git");
     let isDir: boolean;
@@ -91,16 +79,14 @@ async function resolveRepo(localCwd: string, origin: PathOrigin): Promise<RepoEn
 
     if (isDir) return { headPath: join(dotGit, "HEAD"), repo: basename(dir) };
 
-    const gitDir = await readGitDirPointer(dotGit, dir, origin);
+    const gitDir = await readGitDirPointer(dotGit, dir);
     if (!gitDir) return null;
     // `commondir` (relative to gitDir) points at the main repo's `.git`; its
     // parent is the main worktree root, which is the name we want to show.
     let repoRoot = dirname(gitDir);
     try {
       const common = (await readFile(join(gitDir, "commondir"), "utf8")).trim();
-      if (common) {
-        repoRoot = dirname(isAbsoluteAnywhere(common) ? common : resolve(gitDir, common));
-      }
+      if (common) repoRoot = dirname(resolve(gitDir, common));
     } catch {
       // No commondir (plain submodule, or unreadable) — the fallback above is fine.
     }
@@ -119,19 +105,18 @@ function parseHead(txt: string): string {
 }
 
 /** Best-effort repo+branch for one session cwd. Never throws: anything we can't
- *  reach or parse (not a repo, cross-namespace path we can't translate, unreadable
- *  HEAD) comes back as an empty GitInfo and the caller simply shows less. */
-export async function readGitInfo(cwd: string, origin: PathOrigin): Promise<GitInfo> {
-  const localCwd = localPathForOrigin(cwd, origin);
-  if (!localCwd) return NONE;
+ *  reach or parse (not a repo, unreadable HEAD) comes back as an empty GitInfo and
+ *  the caller simply shows less. */
+export async function readGitInfo(cwd: string): Promise<GitInfo> {
+  if (!cwd) return NONE;
 
-  const key = cacheKey(cwd, origin);
+  const key = cwd;
   let pending = repoCache.get(key);
   if (!pending) {
     // `.catch` keeps this function's "never throws" contract even if resolveRepo
     // grows a path that can reject — a rejected promise left in the map would
     // otherwise throw on every later tick.
-    pending = resolveRepo(localCwd, origin).catch(() => null);
+    pending = resolveRepo(cwd).catch(() => null);
     repoCache.set(key, pending);
   }
   const entry = await pending;
@@ -159,10 +144,8 @@ export async function readGitInfo(cwd: string, origin: PathOrigin): Promise<GitI
 /** Drops memo entries for sessions that are gone, keeping both maps bounded by
  *  live-session count (same contract as the caches in sessions.ts). Async only
  *  because repoCache holds promises; by prune time they are all settled. */
-export async function pruneGitCache(
-  active: ReadonlyArray<{ cwd: string; origin: PathOrigin }>,
-): Promise<void> {
-  const liveKeys = new Set(active.map((s) => cacheKey(s.cwd, s.origin)));
+export async function pruneGitCache(cwds: readonly string[]): Promise<void> {
+  const liveKeys = new Set(cwds);
   const liveHeads = new Set<string>();
   for (const [key, pending] of repoCache) {
     if (!liveKeys.has(key)) {

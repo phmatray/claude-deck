@@ -3,7 +3,7 @@
 # within ~1 s, calls process.exit(0), and the Stream Deck app respawns it
 # automatically — no need to quit the whole app.
 set -euo pipefail
-TRIGGER="${HOME}/.claude/.streamdeck-claude.reload"
+TRIGGER="${HOME}/.claude/.claude-deck.reload"
 mkdir -p "$(dirname "$TRIGGER")"
 date +%s%N > "$TRIGGER"
 echo "reload signaled: $TRIGGER"

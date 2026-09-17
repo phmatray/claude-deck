@@ -1,42 +1,17 @@
 import { readdir, readFile, stat, unlink } from "node:fs/promises";
-import { platform } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import streamDeck from "@elgato/streamdeck";
 import type { SessionState } from "./icons/index.js";
-import { WIN_SESSIONS_DIR, WSL_SESSIONS_DIR, WSL_SESSIONS_DIR_FROM_WIN,
-  USAGE_REFRESH_DIR,
-} from "./env.js";
+import { LEGACY_USAGE_REFRESH_DIR, SESSIONS_DIR, USAGE_REFRESH_DIR } from "./env.js";
 import { pruneGitCache, readGitInfo } from "./git-info.js";
 import { parseEventLog, reduceEvents, type DerivedState, type TodoStatus } from "./session-events.js";
-
-/** WSL or Windows-native Claude Code session — they live in different folders
- *  with different process namespaces and need different liveness checks. */
-export type SessionOrigin = "wsl" | "windows";
-
-export interface SessionSourceDir {
-  origin: SessionOrigin;
-  path: string;
-}
-
-/** Where Claude Code writes per-pid session state. From a Windows-side plugin
- *  we read both the WSL home (over the `\\wsl.localhost\<distro>` UNC) and the
- *  Windows home. From a Linux-side plugin only WSL sessions are visible. */
-export const SESSION_SOURCES: SessionSourceDir[] = platform() === "win32"
-  ? [
-      { origin: "wsl", path: WSL_SESSIONS_DIR_FROM_WIN },
-      { origin: "windows", path: WIN_SESSIONS_DIR },
-    ]
-  : [
-      { origin: "wsl", path: WSL_SESSIONS_DIR },
-    ];
 
 /** Surface readdir errors to the polling loop so it can log them once. */
 export let lastReadError: string | undefined;
 
 /** Cache of derived state per event-log path. Re-reading + reducing the NDJSON
  *  every tick is wasteful since the log only grows when a hook fires; gate it
- *  on (mtimeMs, size) so unchanged logs short-circuit. Keyed by full path so
- *  wsl/windows source dirs with the same sessionId don't collide. */
+ *  on (mtimeMs, size) so unchanged logs short-circuit. Keyed by full path. */
 interface EventLogCacheEntry {
   mtimeMs: number;
   size: number;
@@ -46,9 +21,8 @@ interface EventLogCacheEntry {
 const eventLogCache = new Map<string, EventLogCacheEntry>();
 
 /** Cache of parsed <pid>.json keyed by full path, gated on (mtimeMs, size) so a
- *  session file unchanged since last tick skips the readFile + JSON.parse — each
- *  read is a round-trip over the slow `\\wsl.localhost\` UNC, and an idle session
- *  doesn't rewrite its json. Only validated sessions are cached. */
+ *  session file unchanged since last tick skips the readFile + JSON.parse — an
+ *  idle session doesn't rewrite its json. Only validated sessions are cached. */
 interface JsonCacheEntry {
   mtimeMs: number;
   size: number;
@@ -113,7 +87,6 @@ export interface SessionInfo {
   warpSession?: string;
   /** `TERM_PROGRAM` of the CLI's terminal, if the hook saw one. */
   termProgram?: string;
-  origin: SessionOrigin;
   /** "interactive" par défaut si le json n'a pas de champ `kind`. */
   kind: "interactive" | "bg";
   /** Statut brut NON coercé du json pour les bg (ex. "waiting", "running"). undefined pour interactive ; à ne pas confondre avec rawStatus (coercé "busy"|"idle", inutilisé pour les bg). */
@@ -132,13 +105,6 @@ export interface SessionInfo {
 const isPositiveInt = (x: unknown): x is number =>
   typeof x === "number" && Number.isInteger(x) && x > 0;
 
-function basename(p: string): string {
-  if (!p) return "";
-  // Handle both `/` and `\` since Windows sessions report `D:\dev\foo`.
-  const m = p.replace(/[\\/]+$/, "").match(/[^\\/]+$/);
-  return m ? m[0] : p;
-}
-
 /** Pulls the `-b7` tail off a Claude-Code-derived name (`<cwd basename>-<suffix>`).
  *  Deliberately strict: on any other shape we return undefined (no badge) rather
  *  than guessing at the last `-` segment, which on a plain `streamdeck-claude`
@@ -150,12 +116,12 @@ function derivedSuffix(name: string, cwdBase: string): string | undefined {
   return /^[a-z0-9]{1,4}$/i.test(tail) ? tail : undefined;
 }
 
-async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
+async function readSessionFiles(): Promise<SessionInfo[]> {
   let entries: string[];
   try {
-    entries = await readdir(src.path);
+    entries = await readdir(SESSIONS_DIR);
   } catch (err) {
-    lastReadError = `${src.origin}: ${err instanceof Error ? err.message : String(err)}`;
+    lastReadError = err instanceof Error ? err.message : String(err);
     return [];
   }
   const out: SessionInfo[] = [];
@@ -163,7 +129,7 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
     entries
       .filter((f) => /^\d+\.json$/.test(f))
       .map(async (f) => {
-        const path = join(src.path, f);
+        const path = join(SESSIONS_DIR, f);
         let raw: RawSession;
         try {
           const st = await stat(path);
@@ -185,7 +151,7 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
         // other CLI session. It lives for ~3s and would sort to the top of the
         // non-attention group (its lastActivityAt is "now"), shoving every
         // other key down a slot. Its dedicated cwd is how we recognise it.
-        if (raw.cwd === USAGE_REFRESH_DIR) return;
+        if (raw.cwd === USAGE_REFRESH_DIR || raw.cwd === LEGACY_USAGE_REFRESH_DIR) return;
 
         const status = raw.status === "busy" ? "busy" : "idle";
         const kind: "interactive" | "bg" = raw.kind === "bg" ? "bg" : "interactive";
@@ -198,7 +164,7 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
         // son json (status/waitingFor) est la source de vérité. On saute donc
         // entièrement la lecture/réduction de l'event-log pour les bg.
         if (kind !== "bg") {
-          const eventsPath = join(src.path, `${raw.sessionId}.events.ndjson`);
+          const eventsPath = join(SESSIONS_DIR, `${raw.sessionId}.events.ndjson`);
           try {
             const st = await stat(eventsPath);
             const cached = eventLogCache.get(eventsPath);
@@ -217,7 +183,7 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
             const code = (err as NodeJS.ErrnoException)?.code;
             if (code !== "ENOENT") {
               streamDeck.logger.warn(
-                `event-log read failed ${src.origin}/${raw.sessionId}: ${err instanceof Error ? err.message : String(err)}`,
+                `event-log read failed ${raw.sessionId}: ${err instanceof Error ? err.message : String(err)}`,
               );
             }
             // no event log yet (ENOENT) — defaults are fine; don't cache
@@ -234,7 +200,7 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
         // `nameSource` only exists from CC 2.1.x on; older builds get the same
         // treatment when the name still has the derived shape.
         const isDerived = raw.nameSource === "derived" || (raw.nameSource === undefined && suffix !== undefined);
-        const gitInfo = await readGitInfo(raw.cwd, src.origin);
+        const gitInfo = await readGitInfo(raw.cwd);
         const repo = gitInfo.repo || cwdBase;
         const label = !isDerived && rawName ? rawName : repo;
         const badge = isDerived ? suffix : undefined;
@@ -271,28 +237,24 @@ async function readOneSource(src: SessionSourceDir): Promise<SessionInfo[]> {
           todos: derived.todos,
           warpSession: derived.warpSession,
           termProgram: derived.termProgram,
-          origin: src.origin,
         });
       }),
   );
   return out;
 }
 
-/** Reads every <pid>.json across all configured source directories. Stale
- *  (dead-pid) files are still returned; liveness filtering happens upstream. */
+/** Reads every <pid>.json in SESSIONS_DIR. Stale (dead-pid) files are still
+ *  returned; liveness filtering happens upstream. */
 export async function readAllSessions(): Promise<SessionInfo[]> {
   lastReadError = undefined;
-  const results = await Promise.all(SESSION_SOURCES.map(readOneSource));
-  const sessions = results.flat();
+  const sessions = await readSessionFiles();
   // Prune cache entries whose session is gone (SessionEnd unlinked the log, or
   // the .json disappeared) so the maps stay bounded by live-session count.
   const expectedLogs = new Set<string>();
   const expectedJson = new Set<string>();
   for (const s of sessions) {
-    const src = SESSION_SOURCES.find((d) => d.origin === s.origin);
-    if (!src) continue;
-    expectedLogs.add(join(src.path, `${s.sessionId}.events.ndjson`));
-    expectedJson.add(join(src.path, `${s.pid}.json`));
+    expectedLogs.add(join(SESSIONS_DIR, `${s.sessionId}.events.ndjson`));
+    expectedJson.add(join(SESSIONS_DIR, `${s.pid}.json`));
   }
   for (const key of eventLogCache.keys()) {
     if (!expectedLogs.has(key)) eventLogCache.delete(key);
@@ -300,12 +262,12 @@ export async function readAllSessions(): Promise<SessionInfo[]> {
   for (const key of jsonCache.keys()) {
     if (!expectedJson.has(key)) jsonCache.delete(key);
   }
-  await pruneGitCache(sessions.map((s) => ({ cwd: s.cwd, origin: s.origin })));
+  await pruneGitCache(sessions.map((s) => s.cwd));
   return sessions;
 }
 
 /** Grace before a confirmed-dead session's <pid>.json is deleted. A dead file
- *  never changes yet pre-prune was re-read every tick over the slow UNC; we wait
+ *  never changes yet pre-prune was re-stat'd every tick; we wait
  *  this long past the last write so we never race a session that just dropped its
  *  json but whose first liveness probe flaked (or one shown briefly as finished). */
 const PRUNE_GRACE_MS = 60_000;
@@ -327,9 +289,7 @@ export async function pruneDeadSessions(
     sessions
       .filter((s) => s.kind !== "bg" && !liveIds.has(s.sessionId))
       .map(async (s) => {
-        const src = SESSION_SOURCES.find((d) => d.origin === s.origin);
-        if (!src) return;
-        const jsonPath = join(src.path, `${s.pid}.json`);
+        const jsonPath = join(SESSIONS_DIR, `${s.pid}.json`);
         try {
           const st = await stat(jsonPath);
           if (now - st.mtimeMs < PRUNE_GRACE_MS) return; // too fresh to be sure it's dead junk
@@ -342,7 +302,7 @@ export async function pruneDeadSessions(
         } catch {
           return; // lost a race / no permission — leave the orphan log, retry next tick
         }
-        const eventsPath = join(src.path, `${s.sessionId}.events.ndjson`);
+        const eventsPath = join(SESSIONS_DIR, `${s.sessionId}.events.ndjson`);
         try {
           await unlink(eventsPath);
         } catch {
@@ -355,17 +315,12 @@ export async function pruneDeadSessions(
   return pruned;
 }
 
-/** Unlinks one `<sid>.events.ndjson` from the source dir matching `origin`.
- *  Idempotent (ENOENT counts as success) so a long-press reset on a slot whose
- *  agent hasn't emitted anything yet still feels like it "worked". */
-export async function wipeSessionEventLog(
-  sessionId: string,
-  origin: SessionOrigin,
-): Promise<{ wiped: boolean; error?: string }> {
-  const src = SESSION_SOURCES.find((s) => s.origin === origin);
-  if (!src) return { wiped: false, error: `no source for origin=${origin}` };
+/** Unlinks one `<sid>.events.ndjson`. Idempotent (ENOENT counts as success) so
+ *  a long-press reset on a slot whose agent hasn't emitted anything yet still
+ *  feels like it "worked". */
+export async function wipeSessionEventLog(sessionId: string): Promise<{ wiped: boolean; error?: string }> {
   try {
-    await unlink(join(src.path, `${sessionId}.events.ndjson`));
+    await unlink(join(SESSIONS_DIR, `${sessionId}.events.ndjson`));
     return { wiped: true };
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return { wiped: true };
@@ -373,33 +328,29 @@ export async function wipeSessionEventLog(
   }
 }
 
-/** Unlinks every `<sid>.events.ndjson` across all configured source dirs.
- *  Safe to call any time: hooks just recreate the files on the next event.
- *  Used by the Setup action to force every slot back to a clean idle state. */
+/** Unlinks every `<sid>.events.ndjson` in SESSIONS_DIR. Safe to call any time:
+ *  hooks just recreate the files on the next event. Used by the Setup action to
+ *  force every slot back to a clean idle state. */
 export async function wipeAllEventLogs(): Promise<{ wiped: number; errors: string[] }> {
   let wiped = 0;
   const errors: string[] = [];
+  let entries: string[];
+  try {
+    entries = await readdir(SESSIONS_DIR);
+  } catch (err) {
+    return { wiped, errors: [err instanceof Error ? err.message : String(err)] };
+  }
   await Promise.all(
-    SESSION_SOURCES.map(async (src) => {
-      let entries: string[];
-      try {
-        entries = await readdir(src.path);
-      } catch (err) {
-        errors.push(`${src.origin}: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-      const targets = entries.filter((f) => f.endsWith(".events.ndjson"));
-      await Promise.all(
-        targets.map(async (f) => {
-          try {
-            await unlink(join(src.path, f));
-            wiped++;
-          } catch (err) {
-            errors.push(`${src.origin}/${f}: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }),
-      );
-    }),
+    entries
+      .filter((f) => f.endsWith(".events.ndjson"))
+      .map(async (f) => {
+        try {
+          await unlink(join(SESSIONS_DIR, f));
+          wiped++;
+        } catch (err) {
+          errors.push(`${f}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }),
   );
   return { wiped, errors };
 }

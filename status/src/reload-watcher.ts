@@ -1,16 +1,14 @@
 import streamDeck from "@elgato/streamdeck";
 import { stat } from "node:fs/promises";
-import { platform } from "node:os";
-import { WSL_RELOAD_FILE, WSL_RELOAD_FILE_FROM_WIN } from "./env.js";
+import { RELOAD_FILE } from "./env.js";
 
 /**
- * Self-reload trigger: when the mtime of this file changes, exit the plugin.
- * The Stream Deck app respawns it automatically (faster than quitting + relaunching
- * the whole app, and avoids the WSL `readlink` issue that blocks `streamdeck restart`).
+ * Self-reload trigger: when the mtime of RELOAD_FILE changes, exit the plugin.
+ * The Stream Deck app respawns it automatically (faster than quitting +
+ * relaunching the whole app).
  *
  * Touch with `pnpm sd:reload` from the dev box.
  */
-const RELOAD_FILE = platform() === "win32" ? WSL_RELOAD_FILE_FROM_WIN : WSL_RELOAD_FILE;
 
 // Anything newer than this counts as a reload trigger. Captured at process start
 // so a fresh file written *after* startup is correctly detected as an event.

@@ -5,7 +5,7 @@ import { SetupAction } from "./setup-action.js";
 import { watchForReload } from "./reload-watcher.js";
 import { createStateTracker } from "./state-tracker.js";
 import { renderAll } from "./render-loop.js";
-import { wipeAllEventLogs, wipeSessionEventLog, type SessionOrigin } from "./sessions.js";
+import { wipeAllEventLogs, wipeSessionEventLog } from "./sessions.js";
 import { killSession } from "./kill-session.js";
 import { checkHooks, HOOK_FIX_HINT } from "./hook-check.js";
 import {
@@ -57,18 +57,18 @@ async function refreshNow() {
   return result;
 }
 
-async function resetSlot(sessionId: string, origin: SessionOrigin): Promise<void> {
-  const r = await wipeSessionEventLog(sessionId, origin);
+async function resetSlot(sessionId: string): Promise<void> {
+  const r = await wipeSessionEventLog(sessionId);
   if (!r.wiped) {
-    streamDeck.logger.warn(`wipeSessionEventLog(${origin}/${sessionId}) failed: ${r.error}`);
+    streamDeck.logger.warn(`wipeSessionEventLog(${sessionId}) failed: ${r.error}`);
     throw new Error(r.error ?? "wipe failed");
   }
   await runSlowTick();
 }
 
-async function killSlot(pid: number, sessionId: string, origin: SessionOrigin): Promise<void> {
-  streamDeck.logger.info(`kill requested for ${origin}/${sessionId} pid=${pid}`);
-  await killSession(pid, origin);
+async function killSlot(pid: number, sessionId: string): Promise<void> {
+  streamDeck.logger.info(`kill requested for ${sessionId} pid=${pid}`);
+  killSession(pid);
   // Refresh : l'agent passera "finished" puis disparaîtra au tick suivant.
   await runSlowTick();
 }
