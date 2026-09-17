@@ -21,10 +21,12 @@ const LINE_WIDTH = KEYS_PER_ROW * COLS_PER_KEY;
 const MAX_LINES = 2 * LINES_PER_KEY;
 const NBSP = "\u00A0";
 
-// Code points, not UTF-16 units, so a cut never splits an emoji in half.
-// ponytail: one column per code point; wide glyphs (CJK, emoji) push the rest of
+// Grapheme clusters, not UTF-16 units or code points, so a cut never splits an emoji
+// (a ZWJ family, a skin tone, a flag) across two keys.
+// ponytail: one column per grapheme; wide glyphs (CJK, emoji) push the rest of
 // their line out of step across keys. Measure East Asian width if that shows up.
-const chars = (s: string): string[] => Array.from(s);
+const graphemes = new Intl.Segmenter();
+const chars = (s: string): string[] => Array.from(graphemes.segment(s), (g) => g.segment);
 
 /**
  * The strip's lines: word-wrapped at the row width, tabs as two spaces, newlines
@@ -41,26 +43,33 @@ export function detailLines(text: string): string[] {
     lines.push(line.join("").trimEnd());
     line = [];
   };
+  // A wrap never makes a blank line: a line holding only spaces goes with the break.
+  const wrap = () => {
+    if (line.some((c) => c !== " ")) push();
+    else line = [];
+  };
   // One line past the strip is enough to know it overflows: a huge input stops there.
   for (const p of normalized.split("\n")) {
+    const start = lines.length;
     for (const [token] of p.matchAll(/ +|[^ ]+/g)) {
       if (lines.length > MAX_LINES) break;
       const t = chars(token);
       if (token.startsWith(" ")) {
         // Spaces at a break are dropped; anywhere else (indentation too) they stay.
-        if (line.length + t.length > LINE_WIDTH) push();
+        if (line.length + t.length > LINE_WIDTH) wrap();
         else line.push(...t);
         continue;
       }
-      if (line.length + t.length > LINE_WIDTH && t.length <= LINE_WIDTH) push();
+      if (line.length + t.length > LINE_WIDTH && t.length <= LINE_WIDTH) wrap();
       for (const ch of t) {
-        if (line.length === LINE_WIDTH) push();
+        if (line.length === LINE_WIDTH) wrap();
         if (lines.length > MAX_LINES) break;
         line.push(ch);
       }
     }
     if (lines.length > MAX_LINES) break;
-    push();
+    // Empty after a wrap is only the break; an empty paragraph is a blank line.
+    if (line.length || lines.length === start) push();
   }
   if (lines.length <= MAX_LINES) return lines;
   const kept = lines.slice(0, MAX_LINES);

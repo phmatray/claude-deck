@@ -31,8 +31,16 @@ function widthAt(text: string, size: number): number {
   return (units / 1000) * size * 1.06;
 }
 
+/** Text for inside `<text>`. Every key's text passes here, straight from a command or a
+ *  file: a character XML forbids (ESC from a colour code, BEL…) makes the whole SVG
+ *  unparseable, so it becomes U+FFFD — one column for one, the detail strip stays aligned,
+ *  and a hidden control character in a command shows up rather than vanishing. */
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, "\uFFFD")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 // Greedy wrap on measured width. Returns null if a single word cannot fit.

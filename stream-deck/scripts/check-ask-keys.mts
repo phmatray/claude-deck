@@ -21,7 +21,7 @@ process.chdir(tmp);
 
 const streamDeck = (await import("@elgato/streamdeck")).default;
 const { ask, pendingQuestion, startAsk } = await import("../src/ask/ask.ts");
-const { AskBackAction, AskDetailAction, AskOptionAction, AskQueueAction, AskTerminalAction } = await import("../src/ask/actions.ts");
+const { AskBackAction, AskContextAction, AskDetailAction, AskHeaderAction, AskOptionAction, AskQueueAction, AskTerminalAction } = await import("../src/ask/actions.ts");
 const { createQueue, parseQuestion } = await import("../src/ask/queue.ts");
 // The SDK only logs uncaught exceptions, and the watcher keeps the loop alive: fail loudly.
 process.on("uncaughtException", (err) => {
@@ -170,6 +170,19 @@ await until("detail keys painted", () => ["detail0", "detail1", "detail8"].every
 assert.match(svg("detail0"), />git\u00A0push\u00A0--fo<\/text>/);
 assert.match(svg("detail1"), />rce\u00A0origin\u00A0ma<\/text>/);
 assert.ok(!svg("detail8").includes("<text"), "row 2: nothing left to show");
+
+// header key: coloured by the question's kind; context key: the dashboard's name for the session, unless it repeats the project
+const labels: Record<string, string> = { "s-q1": "repo-b7" };
+const header = new AskHeaderAction();
+header.onWillAppear(key("header", 0));
+const context = new AskContextAction((sessionId) => labels[sessionId]);
+context.onWillAppear(key("context", 0));
+await until("header and context painted", () => images.has("header") && images.has("context"));
+assert.match(svg("header"), /stroke="#F2A93B"/, "permission question: amber header");
+assert.match(svg("context"), />repo-b7<\/text>/, "session label looked up by the question's sessionId");
+labels["s-q1"] = "repo";
+await context.repaint();
+assert.equal((svg("context").match(/<text /g) ?? []).length, 2, "a label equal to the project adds nothing: ~/ tag + project");
 
 // option key: the answer names the option by id; the next question comes up, no switch
 const option = new AskOptionAction();

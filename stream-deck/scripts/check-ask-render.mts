@@ -2,6 +2,7 @@
 // rejects a fire-and-forget repaint, and enough of those kill the whole plugin.
 // Run: pnpm exec tsx scripts/check-ask-render.mts
 import assert from "node:assert/strict";
+import { Resvg } from "@resvg/resvg-js";
 import * as render from "../src/ask/render.ts";
 
 const svg = (url: string) => Buffer.from(url.replace(/^data:image\/svg\+xml;base64,/, ""), "base64").toString("utf8");
@@ -37,6 +38,16 @@ assert.match(svg(render.contextKey("repo", "repo-b7")), />repo-b7<\/text>/);
   assert.deepEqual(new Set(texts.map((t) => t[1])).size, 1, "one left x for every line");
   assert.ok(Number(texts[1][2]) > Number(texts[0][2]), "line 4 below line 1");
   assert.ok(!svg(render.detailKey([])).includes("<text"), "no text: a blank key");
+}
+
+// characters XML forbids (ESC, BEL, form feed from a command's colour codes) must not break the SVG:
+// every key still parses, and each one shows as a single U+FFFD so the strip's columns hold
+{
+  const nasty = "printf '\x1b[31mred\x07\x0c\x00' \uFFFF";
+  for (const url of [render.detailKey([nasty]), render.questionKey(nasty, "permission"), render.optionKey(1, nasty), render.contextKey(nasty, nasty)]) {
+    assert.doesNotThrow(() => new Resvg(svg(url)).render(), `parses: ${svg(url).slice(0, 80)}`);
+  }
+  assert.match(svg(render.detailKey(["a\x1bb"])), />a\uFFFDb<\/text>/);
 }
 
 console.log("ok: ask render");

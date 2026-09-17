@@ -15,7 +15,19 @@ const NBSP = "\u00A0";
   assert.ok(lines.every((l) => l.length <= W), "no line wider than the row");
   assert.equal(lines[0], words.slice(0, 15).join(" "), "15 words = 104 chars fit exactly");
   assert.equal(lines[1], words.slice(15).join(" "), "the next line starts on a word, no leading space");
-  assert.equal(detailLines("a " + "x".repeat(103))[1], "x".repeat(103), "a word that would overflow moves down whole");
+  assert.deepEqual(detailLines("a " + "x".repeat(103)), ["a", "x".repeat(103)], "a word that would overflow moves down whole, the space stays behind");
+}
+
+// a wrap never makes a blank line: spaces at a full line's end, indentation wider than the row
+// or indentation left alone by a word moving down all go with the break; an empty paragraph stays blank
+{
+  const x104 = "x".repeat(W);
+  assert.deepEqual(detailLines(x104 + " \nnext"), [x104, "next"]);
+  assert.deepEqual(detailLines(x104 + "  "), [x104]);
+  assert.deepEqual(detailLines(" ".repeat(120) + "foo"), ["foo"]);
+  assert.deepEqual(detailLines(" ".repeat(50) + "x".repeat(80)), ["x".repeat(80)]);
+  assert.deepEqual(detailLines(" ".repeat(W) + "x".repeat(200)), [x104, "x".repeat(96)]);
+  assert.deepEqual(detailLines("a\n" + " ".repeat(120) + "\nb"), ["a", "", "b"]);
 }
 
 // hard break: a token longer than a whole line starts where the line is and breaks at the width
@@ -28,6 +40,7 @@ const NBSP = "\u00A0";
 
 // newlines kept (blank lines too), CRLF normalized, tabs as two spaces, indentation kept, trailing blank lines gone
 assert.deepEqual(detailLines("one\r\n\r\ntwo\n\tthree\n  four\n\n"), ["one", "", "two", "  three", "  four"]);
+assert.deepEqual(detailLines("a\rb"), ["a", "b"], "a lone CR is a newline too");
 assert.deepEqual(detailLines(""), []);
 
 // truncation: two rows of lines at most, the last one ends with "…"
@@ -40,10 +53,20 @@ assert.deepEqual(detailLines(""), []);
   const full = detailLines("x".repeat(W * 20));
   assert.equal(full.length, MAX);
   assert.equal(full[MAX - 1], "x".repeat(W - 1) + "…", "a full last line gives up its last char");
-  // a huge input (a big MCP payload as JSON) stops wrapping once the strip is full
-  const t = Date.now();
-  assert.equal(detailLines(("{\"k\": \"" + "v".repeat(50) + "\"} ").repeat(40_000)).length, MAX);
-  assert.ok(Date.now() - t < 1000, "huge input: early exit");
+  // a huge input (a big MCP payload as JSON) stops wrapping once the strip is full. The output is the
+  // same either way, so count the work: every token scanned is one RegExp exec (matchAll calls it).
+  const exec = RegExp.prototype.exec;
+  let scanned = 0;
+  RegExp.prototype.exec = function (this: RegExp, s: string) {
+    scanned++;
+    return exec.call(this, s);
+  };
+  try {
+    assert.equal(detailLines(("{\"k\": \"" + "v".repeat(50) + "\"} ").repeat(40_000)).length, MAX); // 160 000 tokens
+  } finally {
+    RegExp.prototype.exec = exec;
+  }
+  assert.ok(scanned > 0 && scanned < 1_000, `huge input: early exit (${scanned} tokens scanned)`);
 }
 
 // segments: key k shows its row's lines, cut to columns [c*13, (c+1)*13)
@@ -70,11 +93,13 @@ assert.deepEqual(detailLines(""), []);
   assert.ok(!segmentLines(detailLines("x ".repeat(80)), 3).some((l) => l.includes(" ")), "no ordinary space left");
 }
 
-// a cut never splits a code point: an emoji at a column boundary stays whole
+// a cut never splits a glyph: an emoji at a column boundary stays whole, a ZWJ family too
 {
-  const lines = detailLines("x".repeat(12) + "🙂" + "y");
-  assert.equal(segmentLines(lines, 0)[0], "x".repeat(12) + "🙂");
-  assert.equal(segmentLines(lines, 1)[0], "y");
+  for (const emoji of ["🙂", "👨‍👩‍👧", "👍🏽"]) {
+    const lines = detailLines("x".repeat(12) + emoji + "y");
+    assert.equal(segmentLines(lines, 0)[0], "x".repeat(12) + emoji, emoji);
+    assert.equal(segmentLines(lines, 1)[0], "y", emoji);
+  }
 }
 
 console.log("ok: ask detail");
