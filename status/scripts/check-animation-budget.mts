@@ -10,10 +10,18 @@ assert.deepEqual(animated, [
   "bg_awaiting", "bg_awaiting_permission", "error",
 ]);
 
-// Idle is a static, pure line-art motif drawn in the state's accent.
+// Idle is a static, pure line-art motif drawn in the state's accent: same output
+// for any frame and any clock, a prompt window centred on (72,60) within y 25..95.
+const realNow = Date.now;
 for (const def of [STATES.idle, STATES.bg_idle]) {
+  Date.now = () => 0;
   const svg = def.motif(0, "#123456");
-  assert.equal(def.motif(7, "#123456"), svg, "idle motif ignores the frame");
+  Date.now = () => 1_234_567;
+  assert.equal(def.motif(7, "#123456"), svg, "idle motif ignores the frame and the clock");
   assert.ok(svg.includes("#123456") && !/#de886d/i.test(svg), "idle motif uses the accent colour");
+  const [x, y, w, h] = (svg.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/) ?? []).slice(1).map(Number);
+  assert.deepEqual([x + w / 2, y + h / 2], [72, 60], "prompt window centred on (72,60)");
+  assert.ok(y >= 25 && y + h <= 95, "prompt window within y 25..95");
 }
+Date.now = realNow;
 console.log("ok: animation budget");

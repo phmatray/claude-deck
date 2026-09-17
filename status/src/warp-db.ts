@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { HOME } from "./env.js";
 import { spawnCapture } from "./spawn-capture.js";
 
 /**
@@ -12,7 +12,7 @@ import { spawnCapture } from "./spawn-capture.js";
  *
  * Stable and Preview ship the same Diesel-managed schema.
  */
-const GROUP_ROOT = join(homedir(), "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support");
+const GROUP_ROOT = join(HOME, "Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support");
 const DB_CANDIDATES = [
   join(GROUP_ROOT, "dev.warp.Warp-Stable/warp.sqlite"),
   join(GROUP_ROOT, "dev.warp.Warp-Preview/warp.sqlite"),

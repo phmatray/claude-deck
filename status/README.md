@@ -53,7 +53,7 @@ pnpm sd:validate
 # Quit + relaunch the Stream Deck app so it picks up the new plugin.
 ```
 
-Nothing here needs Accessibility permission: the key press only changes what the plugin draws.
+A short press focuses the session's terminal. For Warp, the `warp://session` path needs no extra permission; the cwd-to-tab fallback sends a System Events keystroke, which needs Stream Deck.app under System Settings → Privacy & Security → Accessibility.
 
 The "Claude Sessions" category appears in the action list.
 
