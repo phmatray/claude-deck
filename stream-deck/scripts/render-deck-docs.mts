@@ -32,12 +32,13 @@ const fixtures: Record<string, Fixture> = {
   plan: {
     kind: "plan",
     context: "horizon-hub",
-    header: "ExitPlanMode",
+    header: "Plan prêt",
     detail:
       "Context\n\nUser wants a simple test/scratch file created.\n\nPlan\n\n" +
       "1. Create `hello.txt` in the current working directory with the content `hi`.\n" +
       "2. Print the file's contents (e.g. `cat hello.txt`) to confirm.\n\nVerification\n\nRead the file back to confirm it contains `hi`.",
-    options: [{ id: "allow", label: "Autoriser" }, { id: "deny", label: "Refuser" }],
+    // A hook cannot approve a plan, so these are the only two keys claude-permission writes.
+    options: [{ id: "revise", label: "Continuer à planifier" }, { id: "terminal", label: "Approuver au terminal" }],
     others: 0,
   },
   ask: {

@@ -54,6 +54,21 @@ function session(events = []) {
   return { home, log };
 }
 const bash = { session_id: "s1", cwd: "/work/horizon-hub", tool_name: "Bash", tool_input: { command: "git push --force origin main" } };
+// The two Bash prompts captured live (map/captures/perm-*.json), inlined so this stays hermetic:
+// one whose suggestions hold no rule to store, one whose addRules suggestion is the "Toujours" key.
+const MKDIR = {
+  tool_input: { command: "mkdir probe-x", description: "Create probe-x directory" },
+  permission_suggestions: [
+    { type: "addDirectories", directories: ["/work/horizon-hub"], destination: "session" },
+    { type: "setMode", mode: "acceptEdits", destination: "session" },
+  ],
+};
+const PYTHON = {
+  tool_input: { command: "python3 -c 'print(42)'", description: "Run Python command" },
+  permission_suggestions: [
+    { type: "addRules", rules: [{ toolName: "Bash", ruleContent: "python3 -c 'print(42)'" }], behavior: "allow", destination: "localSettings" },
+  ],
+};
 const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
 
 // Autoriser → allow; the question carries the session, kind, detail and option ids
@@ -76,16 +91,59 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
 }
 
 // Plan approval (ExitPlanMode, payload shape as captured live) → kind "plan", so the
-// dashboard keeps awaiting_plan rather than the permission state
+// dashboard keeps awaiting_plan rather than the permission state. A hook "allow" does not
+// approve a plan, so the keys are "keep planning" (deny + message) and the terminal.
+const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x\n## Step 2\nfix issue #42\n#hashtag stays", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
 {
   const { home } = session();
-  const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x\n## Step 2\nfix issue #42\n#hashtag stays", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
   const { askDir, done } = run(plan, home);
   const q = await waitQuestion(askDir);
   assert.equal(q.kind, "plan");
+  assert.equal(q.header, "Plan prêt");
   assert.equal(q.detail, "Plan\n1. x\nStep 2\nfix issue #42\n#hashtag stays", "heading markers stripped on every line, other # kept");
-  press(askDir, q, "deny");
-  assert.equal(decision((await done).out).behavior, "deny");
+  assert.deepEqual(q.options, [{ id: "revise", label: "Continuer à planifier" }, { id: "terminal", label: "Approuver au terminal" }]);
+  press(askDir, q, "revise");
+  assert.deepEqual(decision((await done).out), {
+    behavior: "deny",
+    message: "L'utilisateur veut continuer à planifier : ne lance pas le plan, demande-lui ce qu'il faut changer.",
+  });
+}
+
+// "Approuver au terminal" makes no decision at all: the plugin treats option id "terminal"
+// as its Terminal key (cancelled answer), and a plain answer on it is no decision either.
+for (const answer of [(q) => ({ id: q.id, cancelled: true, reason: "terminal" }), (q) => ({ id: q.id, index: 1, optionId: "terminal", label: q.options[1].label, cancelled: false })]) {
+  const { home } = session();
+  const { askDir, done } = run(plan, home);
+  const q = await waitQuestion(askDir);
+  writeFileSync(path.join(askDir, "answers", `${q.id}.json`), JSON.stringify(answer(q)));
+  assert.deepEqual(await done, { code: 0, out: "" });
+}
+
+// A suggestion Claude Code would store → the "Toujours" key between Autoriser and Refuser,
+// echoed back verbatim in updatedPermissions, with the rule spelled out on the last detail line
+{
+  const { home } = session();
+  const { askDir, done } = run({ ...bash, ...PYTHON }, home);
+  const q = await waitQuestion(askDir);
+  assert.deepEqual(q.options, [
+    { id: "allow", label: "Autoriser" },
+    { id: "always", label: "Toujours" },
+    { id: "deny", label: "Refuser" },
+  ]);
+  assert.equal(q.detail, "python3 -c 'print(42)'\n\nRun Python command\nToujours = Bash(python3 -c 'print(42)') · localSettings");
+  press(askDir, q, "always");
+  assert.deepEqual(decision((await done).out), { behavior: "allow", updatedPermissions: PYTHON.permission_suggestions });
+}
+
+// Suggestions with no rule to store (addDirectories + setMode, the captured mkdir) → no Toujours
+{
+  const { home } = session();
+  const { askDir, done } = run({ ...bash, ...MKDIR }, home);
+  const q = await waitQuestion(askDir);
+  assert.deepEqual(q.options, [{ id: "allow", label: "Autoriser" }, { id: "deny", label: "Refuser" }]);
+  assert.equal(q.detail, "mkdir probe-x\n\nCreate probe-x directory", "no Toujours line without a rule");
+  press(askDir, q, "allow");
+  assert.deepEqual(decision((await done).out), { behavior: "allow" });
 }
 
 // The detail keys spell out the call, per tool (a cancelled answer ends each run)
@@ -137,8 +195,8 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
   assert.equal(decision((await done).out).behavior, "deny");
 }
 
-// An option id the question doesn't offer → claude-ask exits 3 → no decision, the dialog decides.
-// (The hook's own DECISIONS guard is unreachable while every option has a decision.)
+// An option id the question doesn't offer (no suggestion here, so no "Toujours" key) →
+// claude-ask exits 3 → no decision, the dialog decides.
 {
   const { home } = session();
   const { askDir, done } = run(bash, home);

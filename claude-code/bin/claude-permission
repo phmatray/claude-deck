@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 // PermissionRequest hook: put Claude Code's permission prompt on the Stream Deck
-// as two keys, Autoriser / Refuser, queued per session through claude-ask.
+// as Autoriser / Toujours / Refuser keys — Continuer à planifier / Approuver au
+// terminal for a plan — queued per session through claude-ask.
 //
 // The terminal dialog stays up while this runs and whichever answer comes first
 // wins, so this never blocks the keyboard. When the user answers in the terminal
@@ -31,6 +32,7 @@ const argsOf = (input) => (input && typeof input === "object" ? input : {});
 /** 1-3 words for the header key: what is being asked, not which tool asks. */
 function header({ tool_name: tool, tool_input }) {
   const args = argsOf(tool_input);
+  if (tool === "ExitPlanMode") return "Plan prêt";
   if (tool === "Bash" && typeof args.command === "string") {
     return args.command.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 28);
   }
@@ -121,21 +123,52 @@ function detail({ tool_name: tool, tool_input: input }) {
 const DECISIONS = {
   allow: { behavior: "allow" },
   deny: { behavior: "deny", message: "Refusé depuis le Stream Deck." },
+  // VERIFIED on Claude Code 2.1.27x: a hook "allow" does not approve a plan, the dialog
+  // just stays up — a deny does get through. So a plan key can only send Claude back to
+  // planning; approving stays the terminal's job, and "terminal" has no decision at all.
+  revise: {
+    behavior: "deny",
+    message: "L'utilisateur veut continuer à planifier : ne lance pas le plan, demande-lui ce qu'il faut changer.",
+  },
 };
+
+const isPlan = input.tool_name === "ExitPlanMode";
+
+/** What "Toujours" stores: Claude Code's own first "allow these calls from now on" rule,
+ *  echoed back verbatim in updatedPermissions. The terminal dialog offers a broader rule
+ *  of its own ("python3 *"); inventing one here would grant more than the deck shows. */
+const alwaysRule = isPlan
+  ? null
+  : (Array.isArray(input.permission_suggestions) ? input.permission_suggestions : []).find(
+      (s) => s?.type === "addRules" && s.behavior === "allow" && typeof s.rules?.[0]?.toolName === "string",
+    );
+if (alwaysRule) DECISIONS.always = { behavior: "allow", updatedPermissions: [alwaysRule] };
+
+/** That rule spelled out on the last detail line, so "Toujours" is never a blind press. */
+function ruleLine({ rules: [rule], destination }) {
+  const content = typeof rule.ruleContent === "string" ? `(${rule.ruleContent})` : "";
+  return `Toujours = ${rule.toolName}${content}${destination ? ` · ${destination}` : ""}`;
+}
 
 const question = {
   // Plan approval keeps its own state on the dashboard (awaiting_plan), not the generic permission one.
-  kind: input.tool_name === "ExitPlanMode" ? "plan" : "permission",
+  kind: isPlan ? "plan" : "permission",
   sessionId: input.session_id,
   header: header(input),
-  detail: detail(input),
+  detail: alwaysRule ? `${detail(input)}\n${ruleLine(alwaysRule)}` : detail(input),
   question: input.tool_input ? JSON.stringify(input.tool_input) : input.tool_name,
   context: path.basename(input.cwd || process.cwd()),
   timeout: ASK_TIMEOUT_S,
-  options: [
-    { id: "allow", label: "Autoriser" },
-    { id: "deny", label: "Refuser" },
-  ],
+  options: isPlan
+    ? [
+        { id: "revise", label: "Continuer à planifier" },
+        { id: "terminal", label: "Approuver au terminal" },
+      ]
+    : [
+        { id: "allow", label: "Autoriser" },
+        ...(alwaysRule ? [{ id: "always", label: "Toujours" }] : []),
+        { id: "deny", label: "Refuser" },
+      ],
 };
 
 const ask = spawn(path.join(__dirname, "claude-ask"), [], { stdio: ["pipe", "pipe", "ignore"] });
