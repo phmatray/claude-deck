@@ -1,4 +1,4 @@
-"use strict";
+/** Key art for the answer keys, as base64 SVG data URLs for `setImage`. */
 
 const FONT = "Helvetica, Arial, sans-serif";
 const SIZE = 144;
@@ -7,7 +7,7 @@ const LABEL_SIZES = [48, 44, 40, 37, 34, 31, 28, 25, 22, 20, 18];
 
 // Helvetica-Bold advance widths, units per 1000em, so text can be measured
 // exactly instead of guessed at from a character count.
-const W = {
+const W: Record<string, number> = {
   " ": 278, "!": 333, '"': 474, "#": 556, $: 556, "%": 889, "&": 722, "'": 238,
   "(": 333, ")": 333, "*": 389, "+": 584, ",": 278, "-": 333, ".": 278, "/": 278,
   ":": 333, ";": 333, "<": 584, "=": 584, ">": 584, "?": 611, "@": 975,
@@ -22,20 +22,20 @@ const W = {
 };
 for (let d = 0; d <= 9; d++) W[String(d)] = 556;
 
-function widthAt(text, size) {
+function widthAt(text: string, size: number): number {
   let units = 0;
-  for (const ch of String(text)) units += W[ch] === undefined ? 611 : W[ch];
+  for (const ch of text) units += W[ch] ?? 611;
   return (units / 1000) * size * 1.06;
 }
 
-function esc(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // Greedy wrap on measured width. Returns null if a single word cannot fit.
-function wrap(text, size, boxW) {
-  const words = String(text).trim().split(/\s+/).filter(Boolean);
-  const lines = [];
+function wrap(text: string, size: number, boxW: number): string[] | null {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
   let line = "";
   for (const word of words) {
     if (widthAt(word, size) > boxW) return null;
@@ -47,7 +47,7 @@ function wrap(text, size, boxW) {
   return lines;
 }
 
-function fit(text, boxW, boxH, maxLines, sizes) {
+function fit(text: string, boxW: number, boxH: number, maxLines: number, sizes: number[]): { size: number; lines: string[] } {
   for (const size of sizes) {
     const lines = wrap(text, size, boxW);
     if (lines && lines.length <= maxLines && lines.length * size * 1.1 <= boxH) {
@@ -56,7 +56,7 @@ function fit(text, boxW, boxH, maxLines, sizes) {
   }
   // Nothing fits: use the smallest size and clip with an ellipsis.
   const size = sizes[sizes.length - 1];
-  const lines = wrap(text, size, boxW) || [String(text)];
+  const lines = wrap(text, size, boxW) || [text];
   const kept = lines.slice(0, maxLines);
   let last = kept[kept.length - 1];
   while (last && widthAt(last + "...", size) > boxW) last = last.slice(0, -1);
@@ -64,7 +64,16 @@ function fit(text, boxW, boxH, maxLines, sizes) {
   return { size, lines: kept };
 }
 
-function block(text, { boxW, boxH, centerY, color, maxLines = 3, sizes = LABEL_SIZES }) {
+interface BlockOptions {
+  boxW: number;
+  boxH: number;
+  centerY: number;
+  color: string;
+  maxLines?: number;
+  sizes?: number[];
+}
+
+function block(text: string, { boxW, boxH, centerY, color, maxLines = 3, sizes = LABEL_SIZES }: BlockOptions): string {
   const { size, lines } = fit(text, boxW, boxH, maxLines, sizes);
   const lh = Math.round(size * 1.1);
   const top = centerY - ((lines.length - 1) * lh) / 2 + size * 0.35;
@@ -79,7 +88,7 @@ function block(text, { boxW, boxH, centerY, color, maxLines = 3, sizes = LABEL_S
     .join("");
 }
 
-function key(bg, stroke, inner) {
+function key(bg: string, stroke: string, inner: string): string {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">` +
     `<rect x="1.5" y="1.5" width="${SIZE - 3}" height="${SIZE - 3}" rx="14" fill="${bg}" stroke="${stroke}" stroke-width="3"/>` +
@@ -87,39 +96,37 @@ function key(bg, stroke, inner) {
   return "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
 }
 
-function optionKey(number, label) {
+export function optionKey(number: number, label: string): string {
   const badge = `<text x="12" y="29" font-family="${FONT}" font-size="21" font-weight="bold" fill="${ACCENT}">${number}</text>`;
   const body = block(label, { boxW: 124, boxH: 108, centerY: 84, color: "#FFFFFF" });
   return key("#111820", "#43536B", badge + body);
 }
 
-function contextKey(label) {
+export function contextKey(label: string): string {
   const body = block(label, { boxW: 124, boxH: 84, centerY: 96, color: "#EAFFF8", maxLines: 2 });
   const tag = `<text x="12" y="34" font-family="${FONT}" font-size="24" font-weight="bold" fill="#63D7B0">~/</text>`;
   return key("#16232B", "#3E7F73", tag + body);
 }
 
-function idleContextKey() {
+export function idleContextKey(): string {
   return key("#080B10", "#151C26", "");
 }
 
-function emptyKey() {
+export function emptyKey(): string {
   return key("#080B10", "#151C26", "");
 }
 
-function questionKey(text) {
+export function questionKey(text: string): string {
   const body = block(text, { boxW: 124, boxH: 118, centerY: 74, color: "#FFFFFF" });
   return key("#0E2545", ACCENT, body);
 }
 
-function idleQuestionKey() {
+export function idleQuestionKey(): string {
   const body = block("no question", { boxW: 122, boxH: 90, centerY: 72, color: "#55636F", maxLines: 2, sizes: [30, 26, 22] });
   return key("#080B10", "#151C26", body);
 }
 
-function cancelKey() {
+export function cancelKey(): string {
   const body = block("Use terminal", { boxW: 124, boxH: 118, centerY: 74, color: "#FFE2E2" });
   return key("#3A1517", "#A24A4A", body);
 }
-
-module.exports = { optionKey, emptyKey, questionKey, idleQuestionKey, cancelKey, contextKey, idleContextKey };

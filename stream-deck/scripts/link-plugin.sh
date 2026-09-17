@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Symlinks this plugin's `.sdPlugin/` directory into the Stream Deck app's
 # Plugins folder (~/Library/Application Support/com.elgato.StreamDeck/Plugins/).
+# Dev loop: install dist/com.phmatray.claudedeck.streamDeckPlugin once first (only the
+# installer imports the bundled profile), then link to run the repo build directly.
 
 set -euo pipefail
 

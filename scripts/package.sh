@@ -1,24 +1,13 @@
 #!/usr/bin/env bash
-# Builds dist/ClaudeAsk.streamDeckPlugin, the double-clickable installer.
+# Builds dist/com.phmatray.claudedeck.streamDeckPlugin, the double-clickable installer.
+# Only a real install imports the bundled "Claude Deck" profile, so install this once
+# even when you plan to develop against a symlink (stream-deck/scripts/link-plugin.sh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PLUGIN_DIR="com.claudeask.streamdeck.sdPlugin"
-SRC="$ROOT/streamdeck/$PLUGIN_DIR"
-DIST="$ROOT/dist"
-STAGING="$(mktemp -d)"
-trap 'rm -rf "$STAGING"' EXIT
-
-node "$ROOT/scripts/build-profile.mjs" "$SRC/Claude Ask.streamDeckProfile"
-
-echo "installing runtime dependencies"
-(cd "$SRC" && npm install --omit=dev --silent --no-audit --no-fund)
-
-mkdir -p "$DIST" "$STAGING/$PLUGIN_DIR"
-cp -R "$SRC/." "$STAGING/$PLUGIN_DIR/"
-rm -rf "$STAGING/$PLUGIN_DIR/logs" "$STAGING/$PLUGIN_DIR/package-lock.json"
-
-rm -f "$DIST/ClaudeAsk.streamDeckPlugin"
-(cd "$STAGING" && zip -qry "$DIST/ClaudeAsk.streamDeckPlugin" "$PLUGIN_DIR" -x "*.DS_Store")
-
-echo "built dist/ClaudeAsk.streamDeckPlugin ($(du -h "$DIST/ClaudeAsk.streamDeckPlugin" | cut -f1))"
+cd "$ROOT/stream-deck"
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+# pack validates first, strips Nodejs.Debug from the packed manifest, and rewrites
+# manifest.json's Version on disk — already 4-part, so the tree stays clean.
+corepack pnpm exec streamdeck pack com.phmatray.claudedeck.sdPlugin --output ../dist/ --force --no-update-check

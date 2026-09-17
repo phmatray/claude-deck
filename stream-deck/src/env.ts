@@ -16,8 +16,12 @@ export const SESSIONS_DIR = join(HOME, ".claude", "sessions");
 /** Touch it (`pnpm sd:reload`, `pnpm watch`) and the plugin exits so the Stream
  *  Deck app respawns it. */
 export const RELOAD_FILE = join(HOME, ".claude", ".claude-deck.reload");
-/** Claude Code user-global settings.json (where install-hook.sh writes the hook). */
+/** Claude Code user-global settings.json (enabledPlugins, legacy hooks). */
 export const SETTINGS_FILE = join(HOME, ".claude", "settings.json");
+
+/** Where `claude-ask` and the answer keys exchange question.json / answer.json.
+ *  `CLAUDE_ASK_DIR` overrides it, as it does for the CLI. */
+export const ASK_DIR = process.env.CLAUDE_ASK_DIR || join(HOME, ".claude-ask");
 
 /** Claude Code's user-global config blob. Among much else it holds
  *  `cachedUsageUtilization`, the plan-usage snapshot the usage keys read. */

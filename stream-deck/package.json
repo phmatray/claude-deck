@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Claude Deck Stream Deck plugin: session dashboard, usage keys and answer keys",
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c && node scripts/build-profile.mjs",
     "watch": "rollup -c -w --watch.onEnd=\"bash scripts/reload-plugin.sh\"",
     "icons:render": "tsx scripts/render-icons.mjs",
     "icons:static": "node scripts/render-static-pngs.mjs",

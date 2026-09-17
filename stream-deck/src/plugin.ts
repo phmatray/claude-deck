@@ -15,6 +15,17 @@ import {
 } from "./usage-action.js";
 import { invalidateUsageCache, readUsageSnapshot } from "./usage.js";
 import { refreshUsageCache, type UsageRefreshResult } from "./usage-refresh.js";
+import { LauncherAction } from "./launcher/launcher-action.js";
+import {
+  AskBackAction,
+  AskContextAction,
+  AskDetailAction,
+  AskHeaderAction,
+  AskOptionAction,
+  AskQueueAction,
+  AskTerminalAction,
+} from "./ask/actions.js";
+import { startAsk } from "./ask/ask.js";
 
 streamDeck.logger.setLevel(LogLevel.DEBUG);
 
@@ -122,12 +133,35 @@ const usageActions = [
   new UsageModelsAction(refreshUsage),
 ];
 
-streamDeck.actions.registerAction(slotAction);
-streamDeck.actions.registerAction(setupAction);
-for (const usageAction of usageActions) {
-  streamDeck.actions.registerAction(usageAction);
+const askKeys = {
+  context: new AskContextAction(),
+  header: new AskHeaderAction(),
+  option: new AskOptionAction(),
+  terminal: new AskTerminalAction(),
+};
+
+// Every manifest action, in manifest order. Keep this list and the manifest's
+// Actions in lockstep: registerAction throws on a UUID the manifest lacks.
+for (const a of [
+  slotAction,
+  setupAction,
+  ...usageActions,
+  new LauncherAction(),
+  askKeys.context,
+  askKeys.header,
+  new AskDetailAction(),
+  askKeys.option,
+  new AskQueueAction(),
+  new AskBackAction(),
+  askKeys.terminal,
+]) {
+  streamDeck.actions.registerAction(a);
 }
 await streamDeck.connect();
+
+startAsk(() => {
+  for (const key of Object.values(askKeys)) void key.repaint();
+});
 
 watchForReload({ pollMs: POLL_MS });
 

@@ -22,6 +22,15 @@
   },
   "CodePath": "bin/plugin.js",
   "UUID": "com.phmatray.claudedeck",
+  "Profiles": [
+    {
+      "Name": "Claude Deck",
+      "DeviceType": 2,
+      "Readonly": true,
+      "DontAutoSwitchWhenInstalled": true,
+      "AutoInstall": true
+    }
+  ],
   "Actions": [
     {
       "Name": "Claude Session Slot",
@@ -106,6 +115,142 @@
         {
           "Image": "imgs/actions/usage/key",
           "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Claude Launcher",
+      "UUID": "com.phmatray.claudedeck.launcher",
+      "Icon": "imgs/actions/launcher/icon",
+      "Tooltip": "Open Claude Code in a chosen directory, in a new Warp tab.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/launcher/icon",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.context",
+      "Name": "Session Context",
+      "Tooltip": "Shows the directory of the session asking the question.",
+      "Icon": "imgs/actions/ask/context",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/context",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.header",
+      "Name": "Question",
+      "Tooltip": "Shows what Claude is asking.",
+      "Icon": "imgs/actions/ask/header",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/header",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.detail",
+      "Name": "Question Detail",
+      "Tooltip": "One segment of the full question text.",
+      "Icon": "imgs/actions/ask/detail",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/detail",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.option",
+      "Name": "Answer Option",
+      "Tooltip": "One answer option. The slot number decides which option it shows.",
+      "Icon": "imgs/actions/ask/option",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/option",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.queue",
+      "Name": "Question Queue",
+      "Tooltip": "Other pending questions. Press to show the next one.",
+      "Icon": "imgs/actions/ask/queue",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/queue",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.back",
+      "Name": "Back",
+      "Tooltip": "Leave the question pending and return to the previous profile.",
+      "Icon": "imgs/actions/ask/back",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/back",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.phmatray.claudedeck.ask.terminal",
+      "Name": "Answer in Terminal",
+      "Tooltip": "Skip the deck and answer in the terminal instead.",
+      "Icon": "imgs/actions/ask/terminal",
+      "Controllers": [
+        "Keypad"
+      ],
+      "SupportedInMultiActions": false,
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "imgs/actions/ask/terminal",
           "ShowTitle": false
         }
       ]
