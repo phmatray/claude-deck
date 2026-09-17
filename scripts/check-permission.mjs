@@ -113,6 +113,8 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
     ["mcp__filesystem__write_file", { file_path: "/w/secrets.env", content: "TOKEN=abc" }, 'filesystem › write_file\n{"file_path":"/w/secrets.env","content":"TOKEN=abc"}', "write_file secrets.env"],
     ["mcp__srv__ns__do", { k: 1 }, 'srv › ns__do\n{"k":1}'],
     ["WebSearch", { query: "stream deck xl" }, '{"query":"stream deck xl"}'],
+    // no tool_input at all: both keys fall back to the tool's name rather than the hook dying
+    ["Bash", null, "Bash", "Bash"],
   ];
   const got = await Promise.all(cases.map(([tool, input]) => detailOf(tool, input)));
   assert.deepEqual(got.map((q) => q.detail), cases.map((c) => c[2]));

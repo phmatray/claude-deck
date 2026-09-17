@@ -39,6 +39,7 @@ then read the answer when the task completes.
 | `question` | Full text. Printed in the terminal, and across the deck's detail keys followed by the numbered options. |
 | `header` | 1-3 words. This is what the header key shows. |
 | `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal and on the detail keys, `id` (optional, defaults to the index) comes back as `optionId`. `id: "terminal"` is reserved: that key acts as the Terminal key (exit 2). |
+| `detail` | Optional. What the detail keys show instead of the question and its options. |
 | `timeout` | Seconds, default 180. |
 | `context` | Defaults to the current directory's name, shown on the top-left key. |
 
