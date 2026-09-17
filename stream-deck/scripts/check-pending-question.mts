@@ -68,8 +68,17 @@ const bg = { ...errored, errored: false, kind: "bg" as const, bgStatus: "running
 assert.equal(deriveState(bg, true), "bg_awaiting_permission");
 assert.equal(deriveState({ ...bg, pendingQuestion: { id: "q", kind: "ask" as const } }, true), "bg_awaiting");
 assert.equal(deriveState({ ...bg, pendingQuestion: undefined }, true), "bg_working");
-// Only the head of the list reaches the keys, numbered from 1 — that number is the
-// corner badge, the only feedback that a short press landed on the session you meant.
+// Every visible key is numbered from 1, in list order — that number is the corner
+// badge, the only feedback that a short press landed on the session you meant.
+assert.deepEqual(
+  (await tracker.tick(8)).map((e) => [e.session.sessionId, e.slotNumber]),
+  [
+    ["new", 1],
+    ["old", 2],
+  ],
+  "numbered down the list, not stamped with one constant",
+);
+// Only the head of the list reaches the keys, and the numbering restarts from 1 there.
 assert.deepEqual(
   (await tracker.tick(1)).map((e) => [e.session.sessionId, e.slotNumber]),
   [["new", 1]],
