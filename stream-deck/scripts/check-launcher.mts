@@ -1,23 +1,32 @@
-// Self-check: the launcher key's pure half — the Warp Tab Config it writes
-// (src/launcher/tab-config.ts) and the art it paints (src/launcher/render.ts).
-// Hermetic: every write goes to a temp HOME, so the real ~/.warp is never touched.
+// Self-check: the launcher key — the Warp Tab Config it writes (src/launcher/tab-config.ts),
+// the art it paints (src/launcher/render.ts) and the action that wires the two to the deck
+// (src/launcher/launcher-action.ts). Hermetic: every write goes to a temp HOME, so the real
+// ~/.warp is never touched, and the one thing left out is the press itself — openUrl shells
+// out to `/usr/bin/open warp://…`, which would take over the user's Warp.
 // Run: pnpm exec tsx scripts/check-launcher.mts
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_COMMAND,
   expandHome,
+  tabConfigPath,
   tabConfigSlug,
   tabConfigStem,
   tabConfigToml,
   tabConfigUri,
   writeTabConfig,
 } from "../src/launcher/tab-config.ts";
-import { launcherKey, UNSET_LABEL } from "../src/launcher/render.ts";
+import { launcherKey, launcherKeyUrl, UNSET_LABEL } from "../src/launcher/render.ts";
 
 const home = mkdtempSync(join(tmpdir(), "claude-deck-launcher-"));
+const src = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+const svg = (dataUrl: string) => {
+  assert.ok(dataUrl.startsWith("data:image/svg+xml;base64,"), "setImage takes a base64 data URL, not raw SVG");
+  return Buffer.from(dataUrl.slice("data:image/svg+xml;base64,".length), "base64").toString("utf8");
+};
 
 // ── the typed directory → an absolute path ───────────────────────────────────
 assert.equal(expandHome("~/repo/x", home), join(home, "repo/x"), "~ is the user's home, not a folder called ~");
@@ -26,7 +35,12 @@ assert.equal(expandHome("  /a/b/  ", home), "/a/b", "typed whitespace and a trai
 assert.equal(expandHome("/a/b/../c", home), "/a/c", "…and so is a detour through ..");
 assert.equal(expandHome("", home), "", "nothing typed stays nothing — the key is unconfigured");
 assert.equal(expandHome("   ", home), "", "…spaces included");
-assert.ok(!expandHome("~notauser/x", home).startsWith(home), "only ~/ expands: ~user is the shell's trick, not ours");
+// Anything still relative is a typo, and resolving it would silently mint a path
+// inside the Stream Deck app's own folder that the key would then look configured for.
+assert.equal(expandHome("~notauser/x", home), "", "only ~/ expands: ~user is the shell's trick, not ours");
+assert.equal(expandHome("repo/x", home), "", "a relative path is not a project");
+assert.equal(expandHome("Users/philippe/repo/x", home), "", "…nor is one that just lost its leading slash");
+assert.notEqual(expandHome("repo/x", home), resolve("repo/x"), "and it is certainly not cwd/repo/x");
 
 // ── slug: readable, filename-safe, and collision-free ────────────────────────
 assert.match(tabConfigSlug("/Users/p/repo/My Project"), /^my_project_[0-9a-f]{6}$/, "basename lowercased, punctuation to _, 6 hex of the path");
@@ -35,6 +49,7 @@ assert.match(tabConfigStem("/a/Été-2026"), /^claude_deck_[a-z0-9_]+$/, "non-AS
 const twins = ["/Users/p/work/api", "/Users/p/perso/api"].map(tabConfigStem);
 assert.notEqual(twins[0], twins[1], "two checkouts named api get two configs, not one overwritten");
 assert.equal(tabConfigStem("/Users/p/work/api"), twins[0], "…and the same path always maps to the same one");
+assert.equal(tabConfigPath(home, "claude_deck_x"), join(home, ".warp", "tab_configs", "claude_deck_x.toml"), "Warp's folder, our stem");
 
 // ── TOML: what Warp reads ────────────────────────────────────────────────────
 const toml = tabConfigToml("/Users/p/repo/deck");
@@ -43,7 +58,10 @@ assert.match(toml, /^\[\[panes\]\]$/m, "one pane");
 assert.match(toml, /^type = "terminal"$/m);
 assert.match(toml, /^directory = "\/Users\/p\/repo\/deck"$/m);
 assert.match(toml, /^commands = \["claude"\]$/m, `the default command is ${DEFAULT_COMMAND}`);
-assert.match(toml, /^is_focused = true$/m);
+// is_focused belongs to Launch Configs (map/warp-launch.md §1) and Warp's own generated
+// tab config has none. A field its deserialiser rejects would kill every press silently:
+// `open` still exits 0, so the key would show no alert and log nothing.
+assert.ok(!/is_focused/.test(toml), "no field Warp's tab-config parser has not been seen to accept");
 assert.match(tabConfigToml("/a/b", "claude --resume"), /^commands = \["claude --resume"\]$/m, "a custom command is honoured");
 assert.match(tabConfigToml("/a/b", ""), /^commands = \["claude"\]$/m, "an empty command field is not a command");
 // A path a user can actually create, and which would otherwise end the TOML string early.
@@ -60,13 +78,16 @@ assert.equal(tabConfigUri("claude_deck_x_abc123", true), "warp://tab_config/clau
 const dir = join(home, "repo", "deck");
 const first = await writeTabConfig(home, dir);
 assert.ok(first.path.startsWith(home + "/"), "nothing is ever written outside the home we were handed");
-assert.equal(first.path, join(home, ".warp", "tab_configs", `${first.stem}.toml`), "Warp's own folder, our own stem");
+assert.equal(first.path, tabConfigPath(home, first.stem), "Warp's own folder, our own stem");
 assert.equal(first.written, true, "a missing file is written");
 assert.equal(readFileSync(first.path, "utf8"), tabConfigToml(dir), "on disk is exactly what tabConfigToml says");
 
+const mtime = statSync(first.path).mtimeMs;
 const again = await writeTabConfig(home, dir);
 assert.equal(again.written, false, "an unchanged key does not churn the file Warp lists");
 assert.equal(again.path, first.path);
+// The flag is a report; the mtime is the thing Warp's + menu sorts by.
+assert.equal(statSync(first.path).mtimeMs, mtime, "…and the file on disk is genuinely untouched");
 
 const changed = await writeTabConfig(home, dir, "claude --continue");
 assert.equal(changed.written, true, "a new command rewrites it");
@@ -82,6 +103,97 @@ assert.ok(launcherKey("  ").includes(`>${UNSET_LABEL}</text>`), "…and whitespa
 const escaped = launcherKey("a<b&c");
 assert.ok(escaped.includes("a&lt;b&amp;c"), "a repo name with markup characters cannot break the SVG");
 assert.ok(!/>a<b/.test(escaped));
+// setImage takes a data URL: un-encoded SVG renders a blank key on the deck.
+assert.equal(svg(launcherKeyUrl("deck")), key, "the data URL decodes back to the art");
+
+// ── the property inspector saves what the action reads ───────────────────────
+const pi = src("../com.phmatray.claudedeck.sdPlugin/ui/launcher.html");
+const actionSrc = src("../src/launcher/launcher-action.ts");
+const fields = [...actionSrc.match(/type LauncherSettings = \{([\s\S]*?)\n\};/)![1].matchAll(/^ {2}(\w+)\??:/gm)].map((m) => m[1]);
+const saved = [...pi.match(/settings = \{\n([^{}]*)\}/)![1].matchAll(/^\s+(\w+):/gm)].map((m) => m[1]);
+assert.deepEqual(saved.sort(), fields.sort(), "the PI's setSettings keys are exactly the settings LauncherSettings declares");
+// A renamed key there is a permanently dead field here, and validate never notices.
+assert.ok(fields.length >= 4, "…and there are four of them, not a regex that matched nothing");
+// The panel is torn down with the field still focused: neither change nor blur fires then.
+assert.ok(/addEventListener\("input"/.test(pi), "typing is saved on its own, not only on blur");
+assert.ok(/addEventListener\("pagehide"/.test(pi), "…and flushed when the panel goes away mid-word");
+
+// ── the action: willAppear / didReceiveSettings / an unconfigured press ───────
+// HOME first: env.ts reads homedir() at load, and the SDK reads manifest.json from cwd
+// and logs into cwd/logs.
+const tmp = mkdtempSync(join(tmpdir(), "claude-deck-launcher-home-"));
+process.env.HOME = tmp;
+copyFileSync(fileURLToPath(new URL("../com.phmatray.claudedeck.sdPlugin/manifest.json", import.meta.url)), join(tmp, "manifest.json"));
+process.chdir(tmp);
+const { LauncherAction } = await import("../src/launcher/launcher-action.ts");
+// The SDK only logs uncaught exceptions: fail loudly instead.
+process.on("uncaughtException", (err) => {
+  console.error(err);
+  process.exit(1);
+});
+
+const images = new Map<string, string>();
+const alerts = new Map<string, number>();
+const fakeKey = (id: string, isKey = true) => ({
+  id,
+  isKey: () => isKey,
+  setImage: async (img: string) => void images.set(id, img),
+  showAlert: async () => void alerts.set(id, (alerts.get(id) ?? 0) + 1),
+});
+const ev = (action: object, settings: object) => ({ action, payload: { settings } }) as any;
+const configs = () => readdirSync(join(tmp, ".warp", "tab_configs")).sort();
+const launcher = new LauncherAction();
+
+const alpha = join(tmp, "repo", "alpha");
+const alphaKey = fakeKey("alpha-key");
+await launcher.onWillAppear(ev(alphaKey, { directory: alpha }));
+// The file exists long before the press: Warp has to have read it by then.
+const alphaToml = tabConfigPath(tmp, tabConfigStem(alpha));
+assert.ok(existsSync(alphaToml), "willAppear puts the Tab Config on disk, not only the press");
+assert.equal(readFileSync(alphaToml, "utf8"), tabConfigToml(alpha), "…with exactly what tabConfigToml says");
+assert.ok(svg(images.get("alpha-key")!).includes(">alpha</text>"), "the key takes the folder's name");
+
+await launcher.onDidReceiveSettings(ev(alphaKey, { directory: `~/repo/alpha`, label: " Alpha ", command: "claude --resume" }));
+assert.match(readFileSync(tabConfigPath(tmp, tabConfigStem(alpha)), "utf8"), /^commands = \["claude --resume"\]$/m, "a settings change refreshes the file");
+assert.ok(svg(images.get("alpha-key")!).includes(">Alpha</text>"), "a label beats the basename");
+
+// Retargeting: the old entry leaves Warp's + menu instead of sitting there forever.
+const beta = join(tmp, "repo", "beta");
+await launcher.onDidReceiveSettings(ev(alphaKey, { directory: beta }));
+assert.ok(existsSync(tabConfigPath(tmp, tabConfigStem(beta))), "the new directory gets its own config");
+assert.ok(!existsSync(tabConfigPath(tmp, tabConfigStem(alpha))), "…and the old one is taken back out");
+
+// …unless a second key still points there: the stem comes from the directory alone.
+const shared = join(tmp, "repo", "shared");
+const oneKey = fakeKey("one");
+const twoKey = fakeKey("two");
+await launcher.onWillAppear(ev(oneKey, { directory: shared }));
+await launcher.onWillAppear(ev(twoKey, { directory: shared, command: "claude --continue" }));
+await launcher.onDidReceiveSettings(ev(oneKey, { directory: beta }));
+assert.ok(existsSync(tabConfigPath(tmp, tabConfigStem(shared))), "a key still pointing there keeps its config");
+
+// Clearing the field takes it out too, and the key admits it is unconfigured.
+await launcher.onDidReceiveSettings(ev(twoKey, { directory: "  ", label: "Shared" }));
+assert.ok(!existsSync(tabConfigPath(tmp, tabConfigStem(shared))), "the last key to leave turns out the light");
+assert.ok(svg(images.get("two")!).includes(`>${UNSET_LABEL}</text>`), "a cleared key says so, whatever the label field holds");
+await launcher.onDidReceiveSettings(ev(twoKey, { directory: "repo/typo" }));
+assert.ok(svg(images.get("two")!).includes(`>${UNSET_LABEL}</text>`), "…and so does a relative path");
+assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "nothing was written for a path that isn't one");
+
+const dialSettings = { directory: join(tmp, "repo", "dial") };
+await launcher.onWillAppear(ev(fakeKey("dial", false), dialSettings));
+await launcher.onDidReceiveSettings(ev(fakeKey("dial", false), dialSettings));
+assert.equal(images.has("dial"), false, "a dial is not a launcher key");
+assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "…and writes nothing either");
+
+// The press, with nothing configured: an alert, not a Warp tab. (The configured press
+// runs `open warp://tab_config/…` for real, so it is the lead's live test, not ours.)
+const emptyKey = fakeKey("empty");
+await launcher.onKeyDown(ev(emptyKey, { directory: " " }));
+assert.equal(alerts.get("empty"), 1, "pressing an unconfigured key alerts");
+assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "…and opens nothing");
 
 rmSync(home, { recursive: true, force: true });
+rmSync(tmp, { recursive: true, force: true });
 console.log("check-launcher: OK");
+process.exit(0); // the SDK's connection attempt keeps the loop alive

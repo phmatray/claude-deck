@@ -94,8 +94,8 @@
 
   <div class="hint">
     Saving writes <code>~/.warp/tab_configs/claude_deck_&lt;slug&gt;.toml</code>, which also shows up
-    in Warp's <code>+</code> menu. Changing the directory leaves the previous file behind — delete it
-    there if it bothers you.
+    in Warp's <code>+</code> menu. Changing the directory (or clearing it) takes the previous entry
+    back out, unless another key still points there.
   </div>
 
   <script>
@@ -128,6 +128,7 @@
     }
 
     // setSettings replaces the whole object, so every field goes on every save.
+    let lastSent;
     function save() {
       if (!ws || ws.readyState !== 1) return;
       settings = {
@@ -136,17 +137,36 @@
         command: document.getElementById("command").value.trim(),
         newWindow: document.getElementById("newWindow").checked,
       };
+      const payload = JSON.stringify(settings);
+      // The debounce fires, then "change" fires on blur with the same text: one
+      // setSettings, not two racing didReceiveSettings writing the same file.
+      if (payload === lastSent) return;
+      lastSent = payload;
       ws.send(JSON.stringify({ event: "setSettings", context: actionContext, payload: settings }));
     }
 
+    // Typing saves on a timer. "change" fires on blur — which is exactly what a
+    // torn-down panel never gets: select another key or close the Stream Deck
+    // window with the cursor still in the field and the path is gone. The delay
+    // is what keeps a half-typed path from writing a Tab Config per keystroke.
+    let timer;
+    const saveSoon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(save, 500);
+    };
+    const saveNow = () => {
+      clearTimeout(timer);
+      save();
+    };
+
     for (const id of FIELDS) {
       const el = document.getElementById(id);
-      // "change" alone would leave the key stale until focus moves elsewhere,
-      // and the panel is often closed straight after typing.
-      el.addEventListener("change", save);
-      el.addEventListener("blur", save);
+      el.addEventListener("input", saveSoon);
+      el.addEventListener("change", saveNow);
     }
-    document.getElementById("newWindow").addEventListener("change", save);
+    document.getElementById("newWindow").addEventListener("change", saveNow);
+    // Last chance: the panel is going away mid-word.
+    window.addEventListener("pagehide", saveNow);
   </script>
 </body>
 </html>

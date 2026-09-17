@@ -11,20 +11,29 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 /** What the tab runs when the key's `command` setting is empty. */
 export const DEFAULT_COMMAND = "claude";
 
-/** Absolute, normalised form of a directory typed into the property inspector.
+/** Absolute, normalised form of a directory typed into the property inspector,
+ *  or `""` for anything that isn't one — an unconfigured key.
+ *
  *  `~` is expanded here because the PI has no folder picker (the SDK ships none),
  *  so the field is typed by hand and `~/repo/x` is how a macOS user writes it —
- *  Warp would silently land in a directory of that literal name otherwise. */
+ *  Warp would silently land in a directory of that literal name otherwise.
+ *
+ *  Anything still relative after that (`repo/x`, `~user/x`, a missing leading
+ *  slash) is rejected rather than `resolve`d: the plugin's working directory is
+ *  a folder inside the Stream Deck app, so resolving would mint a plausible
+ *  absolute path nobody meant and the key would look configured. "Dossier ?" on
+ *  the deck is the honest answer. */
 export function expandHome(directory: string, home: string): string {
   const d = directory.trim();
   if (!d) return "";
   if (d === "~") return home;
-  return resolve(d.startsWith("~/") ? join(home, d.slice(2)) : d);
+  const abs = d.startsWith("~/") ? join(home, d.slice(2)) : d;
+  return isAbsolute(abs) ? resolve(abs) : "";
 }
 
 /** Filename-safe identity of a directory: its basename for a human reading the
@@ -44,7 +53,12 @@ export function tabConfigStem(directory: string): string {
 
 /** The TOML body. `JSON.stringify` doubles as a TOML basic-string escaper — the
  *  two grammars agree on `\"`, `\\` and `\uXXXX`, which covers every path and
- *  command a user can type. */
+ *  command a user can type.
+ *
+ *  No `is_focused`: map/warp-launch.md §1 finds that field among the *Launch
+ *  Config* pane fields, and Warp's own generated tab config doesn't carry it.
+ *  A config Warp refuses to deserialise fails silently — `open` still exits 0 —
+ *  and with a single pane the key buys nothing anyway. */
 export function tabConfigToml(directory: string, command = DEFAULT_COMMAND): string {
   return [
     "# Written by Claude Deck (Stream Deck launcher key). Edits are overwritten.",
@@ -55,7 +69,6 @@ export function tabConfigToml(directory: string, command = DEFAULT_COMMAND): str
     'type = "terminal"',
     `directory = ${JSON.stringify(directory)}`,
     `commands = [${JSON.stringify(command || DEFAULT_COMMAND)}]`,
-    "is_focused = true",
     "",
   ].join("\n");
 }
@@ -63,6 +76,12 @@ export function tabConfigToml(directory: string, command = DEFAULT_COMMAND): str
 /** `open`-able URI for a stem. `new_window=true` gives a window instead of a tab. */
 export function tabConfigUri(stem: string, newWindow = false): string {
   return `warp://tab_config/${encodeURIComponent(stem)}${newWindow ? "?new_window=true" : ""}`;
+}
+
+/** Where a stem's file lives. The launcher removes a config it no longer points
+ *  at, so this spelling is shared rather than repeated at the unlink site. */
+export function tabConfigPath(home: string, stem: string): string {
+  return join(home, ".warp", "tab_configs", `${stem}.toml`);
 }
 
 export interface TabConfigResult {
@@ -82,7 +101,7 @@ export async function writeTabConfig(
   command?: string,
 ): Promise<TabConfigResult> {
   const stem = tabConfigStem(directory);
-  const path = join(home, ".warp", "tab_configs", `${stem}.toml`);
+  const path = tabConfigPath(home, stem);
   const content = tabConfigToml(directory, command);
   const current = await readFile(path, "utf8").catch(() => undefined);
   if (current === content) return { path, stem, written: false };

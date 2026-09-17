@@ -6,11 +6,12 @@ import streamDeck, {
   type KeyDownEvent,
   type WillAppearEvent,
 } from "@elgato/streamdeck";
+import { rm } from "node:fs/promises";
 import { basename } from "node:path";
 import { HOME } from "../env.js";
 import { openUrl } from "../warp-focus.js";
 import { launcherKeyUrl } from "./render.js";
-import { expandHome, tabConfigUri, writeTabConfig } from "./tab-config.js";
+import { expandHome, tabConfigPath, tabConfigStem, tabConfigUri, writeTabConfig } from "./tab-config.js";
 
 /** What the property inspector (ui/launcher.html) stores on the key. */
 type LauncherSettings = {
@@ -24,6 +25,13 @@ type LauncherSettings = {
   command?: string;
 };
 
+/** Stem each key currently has on disk, so retargeting one can take its old Tab
+ *  Config out of Warp's `+` menu. Warp lists every file in that folder, and the
+ *  property inspector saves while the user is still typing — without this, every
+ *  pause mid-path would leave a dead entry there forever. In memory only: the
+ *  plugin restarting forgets, which costs one orphan, not a wrong file. */
+const stems = new Map<string, string>();
+
 /**
  * Warp launcher key: press it and a Warp tab opens in a project, already running
  * `claude`.
@@ -33,6 +41,8 @@ type LauncherSettings = {
  * (map/warp-launch.md §1). The file is (re)written whenever the key appears or its
  * settings change, so Warp has had it on disk long before the press; the press
  * rewrites it too, for the case where the user cleaned out `~/.warp` in between.
+ * Retargeting or clearing a key takes the config it used to own back out of
+ * Warp's `+` menu, which lists every file in that folder.
  *
  * The directory is never `stat`ed: a path that doesn't exist yet is the user's
  * business, and Warp reports the failed `cd` in the tab it opens.
@@ -72,10 +82,20 @@ export class LauncherAction extends SingletonAction<LauncherSettings> {
   /** Paint the key, and keep its Tab Config on disk in step with the settings. */
   private async apply(key: KeyAction<LauncherSettings>, settings: LauncherSettings): Promise<void> {
     const directory = expandHome(settings.directory ?? "", HOME);
-    const label = settings.label?.trim() || (directory ? basename(directory) : "");
+    // Claim the new stem before the first await: two settings changes in flight
+    // would otherwise both read the same stale entry and both skip the cleanup.
+    const stem = directory ? tabConfigStem(directory) : undefined;
+    const stale = stems.get(key.id);
+    if (stem) stems.set(key.id, stem);
+    else stems.delete(key.id);
+
+    // No directory means no key, whatever the label field says: a typo is worth
+    // seeing on the deck as "Dossier ?" rather than as a project that isn't one.
+    const label = directory ? settings.label?.trim() || basename(directory) : "";
     await key.setImage(launcherKeyUrl(label)).catch((err: unknown) => {
       streamDeck.logger.warn(`launcher: setImage failed: ${err instanceof Error ? err.message : String(err)}`);
     });
+    if (stale && stale !== stem) await this.forget(stale);
     if (!directory) return;
     try {
       const { path, written } = await writeTabConfig(HOME, directory, settings.command);
@@ -83,5 +103,17 @@ export class LauncherAction extends SingletonAction<LauncherSettings> {
     } catch (err) {
       streamDeck.logger.warn(`launcher: tab config write failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** Drop a Tab Config no key points at any more — unless another one still does:
+   *  the stem comes from the directory alone, so two keys on the same project
+   *  legitimately share a file, and retargeting one must not yank the other's. */
+  private async forget(stem: string): Promise<void> {
+    if ([...stems.values()].includes(stem)) return;
+    const path = tabConfigPath(HOME, stem);
+    await rm(path, { force: true }).then(
+      () => streamDeck.logger.info(`launcher: removed ${path}`),
+      (err: unknown) => streamDeck.logger.warn(`launcher: tab config cleanup failed: ${err instanceof Error ? err.message : String(err)}`),
+    );
   }
 }
