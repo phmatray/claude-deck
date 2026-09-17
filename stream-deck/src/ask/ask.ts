@@ -102,7 +102,19 @@ export function answer(a: Answer): void {
 /** Starts watching for questions; `onChange` repaints every answer key. */
 export function startAsk(onChange: () => void): void {
   repaint = onChange;
-  mkdirSync(ASK_DIR, { recursive: true });
+  try {
+    mkdirSync(ASK_DIR, { recursive: true });
+  } catch (err) {
+    // Not fatal: this process also runs the session dashboard. watchFile copes
+    // with a missing directory, and claude-ask creates it anyway.
+    streamDeck.logger.error(`ask: cannot create ${ASK_DIR}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Devices from the registration info start out disconnected: connect() resolves
+  // before the app's deviceDidConnect messages, so a question already waiting at
+  // startup finds no deck. Retry when one connects (also covers a hot-plugged XL).
+  streamDeck.devices.onDeviceDidConnect(() => {
+    if (question && !shownOn) showProfile();
+  });
   watchFile(QUESTION_FILE, { interval: 200 }, readQuestion);
   readQuestion();
 }

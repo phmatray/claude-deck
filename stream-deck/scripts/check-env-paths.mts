@@ -4,16 +4,17 @@
 // Run: pnpm exec tsx scripts/check-env-paths.mts
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const home = mkdtempSync(join(tmpdir(), "claude-deck-home-"));
 process.env.HOME = home; // before the import: env.ts reads homedir() at load
+delete process.env.CLAUDE_ASK_DIR;
 const env = await import("../src/env.ts");
 
-for (const p of [env.SESSIONS_DIR, env.RELOAD_FILE, env.SETTINGS_FILE, env.CLAUDE_CONFIG_FILE, env.USAGE_REFRESH_DIR, env.LEGACY_USAGE_REFRESH_DIR]) {
+for (const p of [env.SESSIONS_DIR, env.RELOAD_FILE, env.SETTINGS_FILE, env.CLAUDE_CONFIG_FILE, env.USAGE_REFRESH_DIR, env.LEGACY_USAGE_REFRESH_DIR, env.ASK_DIR]) {
   assert.ok(p.startsWith(home + "/"), `${p} is under HOME`);
 }
 // Pin the names, not just their agreement: the renames are what keep a worktree
@@ -21,6 +22,9 @@ for (const p of [env.SESSIONS_DIR, env.RELOAD_FILE, env.SETTINGS_FILE, env.CLAUD
 assert.equal(env.RELOAD_FILE, join(home, ".claude", ".claude-deck.reload"));
 assert.equal(env.USAGE_REFRESH_DIR, join(home, ".claude", ".claude-deck-usage"));
 assert.equal(env.LEGACY_USAGE_REFRESH_DIR, join(home, ".claude", ".streamdeck-usage"));
+// claude-code/bin/claude-ask writes to the same default; a drift strands every question.
+assert.equal(env.ASK_DIR, join(home, ".claude-ask"));
+assert.match(readFileSync(fileURLToPath(new URL("../../claude-code/bin/claude-ask", import.meta.url)), "utf8"), /CLAUDE_ASK_DIR \|\| path\.join\(os\.homedir\(\), "\.claude-ask"\)/);
 // sessions.ts hides the refresher's session under both cwds, and nothing else.
 assert.ok(env.isUsageRefreshCwd(env.USAGE_REFRESH_DIR), "new refresher cwd hidden");
 assert.ok(env.isUsageRefreshCwd(env.LEGACY_USAGE_REFRESH_DIR), "legacy refresher cwd hidden");
