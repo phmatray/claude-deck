@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // PermissionRequest hook: put Claude Code's permission prompt on the Stream Deck
-// as two keys, Autoriser / Refuser.
+// as two keys, Autoriser / Refuser, queued per session through claude-ask.
 //
 // The terminal dialog stays up while this runs and whichever answer comes first
 // wins, so this never blocks the keyboard. When the user answers in the terminal
@@ -23,7 +23,7 @@ const SKIP_TOOLS = new Set(["AskUserQuestion"]);
 const input = JSON.parse(fs.readFileSync(0, "utf8") || "{}");
 if (!input.tool_name || SKIP_TOOLS.has(input.tool_name)) process.exit(0);
 
-/** 1-3 words for the question key: what is being asked, not which tool asks. */
+/** 1-3 words for the header key: what is being asked, not which tool asks. */
 function header({ tool_name: tool, tool_input: args = {} }) {
   if (tool === "Bash" && typeof args.command === "string") {
     return args.command.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 28);
@@ -50,26 +50,49 @@ const readEvents = () => {
 };
 const baseline = eventLog ? readEvents() : null;
 
-/** True once the session moved on without us: any new event but the idle-prompt Notification. */
+/** Log lines that arrive while the prompt is still open: the permission-prompt
+ *  Notification, and a PermissionRequest line should the status hook ever log that
+ *  event (it runs in parallel with this hook, so it can land after the baseline). */
+const STILL_WAITING = new Set(["Notification", "PermissionRequest"]);
+
+/** True once the session moved on without us: any new event the open prompt can't explain. */
 function resolvedElsewhere() {
   if (!baseline) return false;
   const now = readEvents();
   if (!now) return false;
   return now.slice(baseline.length).some((line) => {
     try {
-      return JSON.parse(line).event !== "Notification";
+      return !STILL_WAITING.has(JSON.parse(line).event);
     } catch {
       return false; // partial line mid-write
     }
   });
 }
 
+/** The full call, for the detail keys: the command itself for Bash, the input as JSON otherwise. */
+function detail({ tool_name: tool, tool_input: args }) {
+  if (tool === "Bash" && typeof args?.command === "string") return args.command;
+  return args ? JSON.stringify(args) : tool;
+}
+
+/** Option id → hook decision. Answers are mapped by id, never by key position. */
+const DECISIONS = {
+  allow: { behavior: "allow" },
+  deny: { behavior: "deny", message: "Refusé depuis le Stream Deck." },
+};
+
 const question = {
+  kind: "permission",
+  sessionId: input.session_id,
   header: header(input),
+  detail: detail(input),
   question: input.tool_input ? JSON.stringify(input.tool_input) : input.tool_name,
   context: path.basename(input.cwd || process.cwd()),
   timeout: ASK_TIMEOUT_S,
-  options: [{ label: "Autoriser" }, { label: "Refuser" }],
+  options: [
+    { id: "allow", label: "Autoriser" },
+    { id: "deny", label: "Refuser" },
+  ],
 };
 
 const ask = spawn(path.join(__dirname, "claude-ask"), [], { stdio: ["pipe", "pipe", "ignore"] });
@@ -77,26 +100,33 @@ let out = "";
 ask.stdout.on("data", (c) => (out += c));
 ask.stdin.end(JSON.stringify(question));
 
+// Claude Code may kill this hook once the dialog is answered: take the deck question
+// down with it rather than leave it waiting out its timeout.
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => {
+    ask.kill("SIGTERM");
+    process.exit(0);
+  });
+}
+
 const watcher = setInterval(() => {
   if (resolvedElsewhere()) {
     clearInterval(watcher);
-    ask.kill("SIGTERM"); // claude-ask removes question.json → the deck returns to its profile
+    ask.kill("SIGTERM"); // claude-ask deletes its own question file → it leaves the deck
   }
 }, POLL_MS);
 
 ask.on("exit", (code) => {
   clearInterval(watcher);
-  if (code !== 0) process.exit(0); // withdrawn, "Use terminal", timed out or deck busy: the dialog decides
+  if (code !== 0) process.exit(0); // withdrawn, "Terminal", timed out or bad input: the dialog decides
   let answer;
   try {
     answer = JSON.parse(out);
   } catch {
     process.exit(0);
   }
-  const decision =
-    answer.index === 0
-      ? { behavior: "allow" }
-      : { behavior: "deny", message: "Refusé depuis le Stream Deck." };
+  const decision = DECISIONS[answer.optionId];
+  if (!decision) process.exit(0);
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision } }));
   process.exit(0);
 });

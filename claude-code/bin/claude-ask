@@ -2,24 +2,37 @@
 "use strict";
 // Put a question on the Stream Deck and block until a key is pressed.
 //
-//   echo '{"question":"Which one?","options":["A","B"]}' | claude-ask
+//   echo '{"question":"Which one?","options":["A","B"]}' | claude-ask [--session <id>]
 //
-// stdin   JSON: { question, header?, options[], timeout?, context? }
-// stdout  JSON: { index, label, cancelled }
-// exit    0 answered · 2 answer in the terminal instead · 3 timed out · 4 deck busy
+// stdin   JSON: { question, header?, detail?, kind?, sessionId?, options[], timeout?, context? }
+//         options: labels, or { id?, label, description? } (id defaults to the index)
+// stdout  JSON: { index, optionId, label, cancelled } on exit 0
+// exit    0 answered · 1 bad input · 2 answer in the terminal instead · 3 timed out, withdrawn or killed
+//
+// Every question is its own pair of files, so any number of sessions can ask at
+// once and the deck queues them (there is no lock, and no "deck busy" exit 4):
+//   questions/<id>.json  written here (tmp + rename, never seen half-written)
+//   answers/<id>.json    written by the Stream Deck plugin
+// This process only ever removes those two files of its own.
 
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const { randomUUID } = require("crypto");
 
 const STATE_DIR = process.env.CLAUDE_ASK_DIR || path.join(os.homedir(), ".claude-ask");
-const QUESTION_FILE = path.join(STATE_DIR, "question.json");
-const ANSWER_FILE = path.join(STATE_DIR, "answer.json");
-const LOCK_FILE = path.join(STATE_DIR, "lock");
+const QUESTIONS_DIR = path.join(STATE_DIR, "questions");
+const ANSWERS_DIR = path.join(STATE_DIR, "answers");
 const POLL_MS = 150;
-const STALE_LOCK_MS = 15 * 60 * 1000;
 const MAX_OPTIONS = 8; // the profile's bottom row: eight option keys
+const KINDS = new Set(["ask", "permission", "plan"]);
+const MAX_ANCESTOR_HOPS = 20;
+
+const id = randomUUID();
+const QUESTION_FILE = path.join(QUESTIONS_DIR, `${id}.json`);
+const QUESTION_TMP = path.join(QUESTIONS_DIR, `.${id}.tmp`);
+const ANSWER_FILE = path.join(ANSWERS_DIR, `${id}.json`);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -31,36 +44,12 @@ function rm(file) {
   }
 }
 
-function lockHolderGone() {
-  try {
-    const { pid, at } = JSON.parse(fs.readFileSync(LOCK_FILE, "utf8"));
-    if (Date.now() - Date.parse(at) > STALE_LOCK_MS) return true;
-    process.kill(pid, 0); // throws if the holder died
-    return false;
-  } catch (err) {
-    return err.code !== "ENOENT";
-  }
-}
-
-// One question owns the deck at a time, so concurrent sessions queue instead of clobbering.
-async function acquireLock(waitMs) {
-  fs.mkdirSync(STATE_DIR, { recursive: true });
-  const deadline = Date.now() + waitMs;
-  for (;;) {
+/** Our own files only: another session's question must survive whatever happens to this one. */
+function cleanup() {
+  for (const f of [QUESTION_TMP, QUESTION_FILE, ANSWER_FILE]) {
     try {
-      const fd = fs.openSync(LOCK_FILE, "wx");
-      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-      fs.closeSync(fd);
-      return true;
-    } catch (err) {
-      if (err.code !== "EEXIST") throw err;
-      if (lockHolderGone()) {
-        rm(LOCK_FILE);
-        continue;
-      }
-      if (Date.now() >= deadline) return false;
-      await sleep(POLL_MS);
-    }
+      rm(f);
+    } catch {}
   }
 }
 
@@ -73,101 +62,136 @@ function readStdin() {
   });
 }
 
-// A killed process must still release the deck, or it stays stuck on the ask profile.
+// A killed process must still take its question off the deck.
 function installSignalCleanup() {
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
-      rm(QUESTION_FILE);
-      rm(LOCK_FILE);
+      cleanup();
       process.exit(3);
     });
   }
 }
 
+function fail(message) {
+  process.stderr.write(`claude-ask: ${message}\n`);
+  process.exit(1);
+}
+
+/** The Claude Code session asking, so the deck can badge its key. The skill runs us
+ *  from a Bash tool call, several processes below the `claude` CLI, whose pid names
+ *  its ~/.claude/sessions/<pid>.json. */
+function sessionFromAncestors() {
+  let pid = process.ppid;
+  for (let hop = 0; hop < MAX_ANCESTOR_HOPS && pid > 1; hop++) {
+    try {
+      const { sessionId } = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude", "sessions", `${pid}.json`), "utf8"));
+      if (typeof sessionId === "string" && sessionId) return sessionId;
+    } catch {}
+    try {
+      pid = Number(execFileSync("ps", ["-o", "ppid=", "-p", String(pid)], { encoding: "utf8" }).trim());
+    } catch {
+      return null; // ps exits 1 once the pid is gone
+    }
+  }
+  return null;
+}
+
 async function main() {
   installSignalCleanup();
+  const flag = process.argv.indexOf("--session");
+  const flagSession = flag === -1 ? undefined : process.argv[flag + 1];
+  if (flag !== -1 && !flagSession) fail("--session needs an id");
+
   const raw = await readStdin();
   let spec;
   try {
     spec = JSON.parse(raw);
   } catch (err) {
-    process.stderr.write(`claude-ask: stdin is not valid JSON (${err.message})\n`);
-    process.exit(1);
+    fail(`stdin is not valid JSON (${err.message})`);
   }
 
   const isText = (v) => typeof v === "string";
-  const options = Array.isArray(spec?.options) ? spec.options.map((o) => (isText(o) ? { label: o } : o)) : [];
-  if (!options.length) {
-    process.stderr.write("claude-ask: no options given\n");
-    process.exit(1);
-  }
-  // question.json is painted straight onto the keys; the plugin must never get anything but text.
   const textOr = (v) => v == null || isText(v);
-  if (!options.every((o) => isText(o?.label) && textOr(o.description)) || !["header", "question", "context"].every((k) => textOr(spec[k]))) {
-    process.stderr.write("claude-ask: each option needs a text label; description, header, question and context must be text\n");
-    process.exit(1);
+  const options = Array.isArray(spec?.options) ? spec.options.map((o) => (isText(o) ? { label: o } : o)) : [];
+  if (!options.length) fail("no options given");
+  // The question file is painted straight onto the keys; the plugin must never get anything but text.
+  if (
+    !options.every((o) => isText(o?.label) && textOr(o.description) && textOr(o.id)) ||
+    !["header", "question", "context", "detail", "sessionId"].every((k) => textOr(spec[k]))
+  ) {
+    fail("each option needs a text label; id, description, header, question, detail, context and sessionId must be text");
   }
-  if (options.length > MAX_OPTIONS) {
-    process.stderr.write(`claude-ask: at most ${MAX_OPTIONS} options fit on the deck\n`);
-    process.exit(1);
-  }
+  if (options.length > MAX_OPTIONS) fail(`at most ${MAX_OPTIONS} options fit on the deck`);
+  if (spec.kind != null && !KINDS.has(spec.kind)) fail(`kind must be one of ${[...KINDS].join(", ")}`);
+  if (spec.timeout != null && !(Number.isFinite(spec.timeout) && spec.timeout >= 0)) fail("timeout must be a number of seconds");
+  const withIds = options.map((o, i) => ({ id: o.id ?? String(i), label: o.label, ...(o.description != null && { description: o.description }) }));
+  // Answers are mapped back by option id, so two options sharing one would be indistinguishable.
+  if (new Set(withIds.map((o) => o.id)).size !== withIds.length) fail("option ids must be unique");
 
-  if (!(await acquireLock(10_000))) {
-    process.stderr.write("claude-ask: the deck is busy with another question\n");
-    process.exit(4);
-  }
-
+  const createdAt = new Date();
+  const timeoutMs = (spec.timeout == null ? 180 : spec.timeout) * 1000;
   const question = {
-    id: randomUUID(),
-    header: spec.header || "Question",
-    question: spec.question || "",
+    id,
+    kind: spec.kind || "ask",
+    sessionId: flagSession || spec.sessionId || sessionFromAncestors(),
+    pid: process.pid,
+    cwd: process.cwd(),
     // Shown on the top-left key so you can tell which session is asking.
     context: spec.context || path.basename(process.cwd()),
-    options,
-    createdAt: new Date().toISOString(),
+    header: spec.header || "Question",
+    ...(spec.detail != null && { detail: spec.detail }),
+    question: spec.question || "",
+    options: withIds,
+    createdAt: createdAt.toISOString(),
+    expiresAt: new Date(createdAt.getTime() + timeoutMs).toISOString(),
   };
-  const timeoutMs = (spec.timeout == null ? 180 : spec.timeout) * 1000;
 
   // The full text goes to the terminal; the keys only have room for the labels.
   process.stderr.write(`\n${question.question || question.header}\n`);
-  options.forEach((o, i) =>
+  withIds.forEach((o, i) =>
     process.stderr.write(`  ${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}\n`)
   );
   process.stderr.write("\nPress a key on the Stream Deck.\n");
 
-  rm(ANSWER_FILE);
-  fs.writeFileSync(QUESTION_FILE, JSON.stringify(question, null, 2));
-
   let answer = null;
-  const deadline = Date.now() + timeoutMs;
+  const deadline = createdAt.getTime() + timeoutMs;
   try {
+    fs.mkdirSync(QUESTIONS_DIR, { recursive: true });
+    fs.mkdirSync(ANSWERS_DIR, { recursive: true });
+    fs.writeFileSync(QUESTION_TMP, JSON.stringify(question, null, 2));
+    fs.renameSync(QUESTION_TMP, QUESTION_FILE);
     while (Date.now() < deadline) {
       try {
         const parsed = JSON.parse(fs.readFileSync(ANSWER_FILE, "utf8"));
-        if (parsed.id === question.id) {
+        if (parsed.id === id) {
           answer = parsed;
           break;
         }
       } catch {
-        // not answered yet, or caught mid-write
+        // not answered yet
       }
       await sleep(POLL_MS);
     }
   } finally {
-    rm(QUESTION_FILE); // clears the keys and returns the deck to the previous profile
-    rm(LOCK_FILE);
+    cleanup(); // the question leaves the deck
   }
 
   if (!answer) {
     process.stderr.write("claude-ask: timed out\n");
     process.exit(3);
   }
-  process.stdout.write(JSON.stringify(answer) + "\n");
-  process.exit(answer.cancelled ? 2 : 0);
+  if (answer.cancelled) process.exit(2);
+  const index = withIds.findIndex((o) => o.id === answer.optionId);
+  if (index === -1) {
+    process.stderr.write(`claude-ask: answer names an unknown option ${JSON.stringify(answer.optionId)}\n`);
+    process.exit(3);
+  }
+  process.stdout.write(JSON.stringify({ index, optionId: withIds[index].id, label: withIds[index].label, cancelled: false }) + "\n");
+  process.exit(0);
 }
 
 main().catch((err) => {
   process.stderr.write(`claude-ask: ${err.message}\n`);
-  rm(LOCK_FILE);
+  cleanup();
   process.exit(1);
 });

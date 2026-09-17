@@ -38,14 +38,18 @@ then read the answer when the task completes.
 |---|---|
 | `question` | Full text. Printed in the terminal, not on the keys. |
 | `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal. |
+| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal, `id` (optional, defaults to the index) comes back as `optionId`. |
 | `timeout` | Seconds, default 180. |
 | `context` | Defaults to the current directory's name, shown on the top-left key. |
 
-Answer arrives on stdout as `{"index":0,"label":"Add jitter","cancelled":false}`.
+The question is tied to your session (found through the process tree; `--session <id>`
+overrides it), so its key on the dashboard shows that a question is waiting.
 
-Exit codes: `0` answered, `2` the user chose to answer in the terminal, `3` timed out,
-`4` another question already owns the deck.
+Answer arrives on stdout as `{"index":0,"optionId":"0","label":"Add jitter","cancelled":false}`.
+
+Exit codes: `0` answered, `1` bad input, `2` the user chose to answer in the terminal,
+`3` timed out or withdrawn. (There is no exit code `4` any more: questions from
+several sessions queue on the deck instead of refusing each other.)
 
 ## Writing labels that fit
 
@@ -62,9 +66,10 @@ deciding, and presses the key to answer.
 
 - **Always print the full question and all descriptions in your reply too.** The keys
   cannot hold enough text to decide from alone.
-- **Fall back, never guess.** On exit code `2`, `3`, or `4`, ask the same question in the
+- **Fall back, never guess.** On exit code `2` or `3`, ask the same question in the
   terminal instead. Do not pick an option on the user's behalf.
 - **Do not use this for anything a label cannot convey** — approving a specific command,
   confirming a destructive action, or any choice where the exact wording matters. Ask in
   the terminal where the user can read it.
-- One question at a time. The deck holds a lock; a second question gets exit code `4`.
+- One question at a time per session. Other sessions' questions queue on the deck; the
+  user steps through them with the queue key.
