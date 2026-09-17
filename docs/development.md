@@ -6,21 +6,20 @@ There is no test framework and no lint script. Verify a change by running `pnpm 
 
 | Script | What it does |
 |---|---|
-| `pnpm build` | Rollup → `com.julien.claudesessions.sdPlugin/bin/plugin.js` (terser in prod, sourcemaps in watch) |
+| `pnpm build` | Rollup → `com.phmatray.claudedeck.sdPlugin/bin/plugin.js` (terser in prod, sourcemaps in watch) |
 | `pnpm watch` | `rollup -w`; auto-touches the reload trigger after each rebuild |
 | `pnpm sd:reload` | Touch `~/.claude/.claude-deck.reload` → plugin self-exits → SD app respawns it (~1 s) |
 | `pnpm sd:link` / `pnpm sd:unlink` | (Re)create / remove the symlink into `~/Library/Application Support/com.elgato.StreamDeck/Plugins/` |
 | `pnpm sd:validate` | `streamdeck validate` against the manifest + assets |
-| `pnpm sd:pack` | Bundle `dist/com.julien.claudesessions.streamDeckPlugin` for distribution |
+| `pnpm sd:pack` | Bundle `../dist/com.phmatray.claudedeck.streamDeckPlugin` for distribution (or `scripts/package.sh` from the repo root) |
 | `pnpm sd:dev` | Enable Stream Deck developer mode (one-time) |
-| `pnpm install:hook` | Idempotently register the hook for every event into `~/.claude/settings.json` |
 | `pnpm icons:render` | Regenerate `icons/*.svg` reference assets from `src/icons/` |
 | `pnpm icons:static` | Rasterize manifest PNGs from `assets/svg/` via `@resvg/resvg-js` |
-| `pnpm check:hooks` | Diff installed hooks against `scripts/install-hook.sh` to confirm the registration is current |
+| `bash ../scripts/probe-hooks.sh` | Check the installed Claude Code plugin registers every hook (reads the real `~/.claude`) |
 
 The plugin also runs this check at runtime (`src/hook-check.ts`): on startup it logs a warning, and the **Setup key** shows an amber `HOOKS` badge, whenever a required event isn't registered catch-all — so stale config (the classic "permission padlock never clears") surfaces instead of silently producing wrong icons.
 
-Logs land at `~/Library/Logs/ElgatoStreamDeck/com.julien.claudesessions.sdPlugin/`.
+Logs land at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
 
 ## Reload flow
 
@@ -32,9 +31,9 @@ The first time after building, you still need to quit + relaunch the SD app once
 
 ## End-to-end verification checklist
 
-1. `pnpm build` produces `com.julien.claudesessions.sdPlugin/bin/plugin.js`.
+1. `pnpm build` produces `com.phmatray.claudedeck.sdPlugin/bin/plugin.js`.
 2. `pnpm sd:validate` reports "Validation successful".
-3. `pnpm install:hook` — `jq '.hooks.Notification' ~/.claude/settings.json` shows the new hook.
+3. `claude plugin install claude-deck@phmatray` — `/hooks` in Claude Code lists them under Plugin Hooks.
 4. `pnpm sd:link` — output shows the `✓ symlink:` line.
 5. Quit + relaunch the Stream Deck app. Drag **Claude Session Slot** onto whatever keys you want to dedicate to live sessions.
 6. In a terminal, run `claude` somewhere. Slot 1 fills with the project name in amber while it works, blue while idle.

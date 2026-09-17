@@ -2,7 +2,7 @@
 
 > A Stream Deck plugin that mirrors live [Claude Code](https://github.com/anthropics/claude-code) CLI session state on as many keys as you assign it.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#compatibility)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933.svg)](https://nodejs.org)
 [![Stream Deck](https://img.shields.io/badge/Stream%20Deck-%E2%89%A56.5-black.svg)](https://www.elgato.com/stream-deck)
@@ -25,11 +25,11 @@ Each running `claude` CLI session lights up one key on your deck — project nam
 ## Features
 
 - **Live per-session state** — sessions auto-fill the slots in start-time order; excess sessions beyond the slot count are simply not displayed.
-- **Press → bring that session's terminal to the front.** The hook records the Warp pane each CLI runs in (`WARP_TERMINAL_SESSION_UUID`), so the press opens `warp://session/<uuid>` — the exact pane, even for `claude --worktree` sessions that share a tab cwd, and without Accessibility permission. VS Code sessions get their window. Logs written before the uuid was recorded fall back to the cwd → Warp tab heuristic. Keys are ordered "needs you first, then most recently active" (see [`docs/architecture.md`](docs/architecture.md#slot-ordering)); give the plugin more slots than you run sessions.
+- **Press → bring that session's terminal to the front.** The hook records the Warp pane each CLI runs in (`WARP_TERMINAL_SESSION_UUID`), so the press opens `warp://session/<uuid>` — the exact pane, even for `claude --worktree` sessions that share a tab cwd, and without Accessibility permission. VS Code sessions get their window. Logs written before the uuid was recorded fall back to the cwd → Warp tab heuristic. Keys are ordered "needs you first, then most recently active" (see [`docs/architecture.md`](../docs/architecture.md#slot-ordering)); give the plugin more slots than you run sessions.
 - **Repo and branch on the key** — top line is the repository, bottom line the branch it's checked out on (a short SHA if HEAD is detached); the repo name is truncated with an ellipsis when too long, and a branch that doesn't fit wraps onto two lines instead. Sessions sharing a worktree are told apart by a small top-left suffix badge.
 - **Long-press (≥500 ms) → reset that session's state log** — useful if a stuck `awaiting` lingers.
 - **Plan usage keys** — three optional keys mirror your Claude subscription's rate limits: the 5-hour session window, the weekly all-models window, and whatever per-model weekly buckets the server reports (labelled with the server's own names). Colour steps quietly green → amber → orange → red, and the footer counts down to the reset. Read straight from the usage snapshot Claude Code caches in `~/.claude.json` — no credentials, no network call. The plugin keeps that snapshot fresh by running `claude -p "/usage"` every few minutes (a local slash command, no model turn) since Claude Code otherwise only refetches when something asks to see usage. Press any of them to force a refresh.
-- **Setup key** — wipes all event logs and re-renders every slot in one press. Also self-checks the hook registration: if it's stale or missing (icons would silently break — e.g. a permission padlock that never clears), the key shows an amber **HOOKS** warning. Fix with `pnpm install:hook`, then reload.
+- **Setup key** — wipes all event logs and re-renders every slot in one press. Also self-checks the hook registration: if it's stale or missing (icons would silently break — e.g. a permission padlock that never clears), the key shows an amber **HOOKS** warning. Fix with `claude plugin install claude-deck@phmatray`, then reload.
 
 ## Compatibility
 
@@ -47,7 +47,7 @@ Prereqs: [pnpm](https://pnpm.io), `jq`, `perl`, Node.js 20+, an Elgato Stream De
 ```bash
 pnpm install
 pnpm build
-pnpm install:hook        # add hooks to ~/.claude/settings.json
+claude plugin install claude-deck@phmatray   # the hooks ship in the Claude Code plugin (see ../README.md)
 pnpm sd:link             # symlink .sdPlugin into ~/Library/Application Support/com.elgato.StreamDeck/Plugins/
 pnpm sd:validate
 # Quit + relaunch the Stream Deck app so it picks up the new plugin.
@@ -72,14 +72,14 @@ pnpm watch                    # rebuild + auto-reload the plugin on each change
 pnpm sd:reload                # touch the reload trigger to respawn the plugin (~1 s)
 ```
 
-Logs land at `~/Library/Logs/ElgatoStreamDeck/com.julien.claudesessions.sdPlugin/`. Full script reference and verification checklist in [`docs/development.md`](docs/development.md).
+Logs land at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`. Full script reference and verification checklist in [`docs/development.md`](../docs/development.md).
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — session discovery, hook event → state machine, path resolution, render pipeline
-- [`docs/development.md`](docs/development.md) — full pnpm scripts, end-to-end verification, tweaks
-- [`docs/warp-focus.md`](docs/warp-focus.md) — Warp focus internals (the cwd → tab fallback behind a short press) and failure modes
+- [`docs/architecture.md`](../docs/architecture.md) — session discovery, hook event → state machine, path resolution, render pipeline
+- [`docs/development.md`](../docs/development.md) — full pnpm scripts, end-to-end verification, tweaks
+- [`docs/warp-focus.md`](../docs/warp-focus.md) — Warp focus internals (the cwd → tab fallback behind a short press) and failure modes
 
 ## License
 
-Code is MIT — see [`LICENSE`](LICENSE).
+Code is MIT — see [`LICENSE`](../LICENSE).

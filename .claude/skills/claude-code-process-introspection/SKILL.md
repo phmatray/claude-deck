@@ -70,7 +70,7 @@ Claude's `ExitPlanMode` tool pauses the assistant until the user clicks Approve 
 
 We use the same notify-file pattern: PreToolUse drops `<sessionId>.plan.json`, PostToolUse removes it. PostToolUse fires both on Approve (when Claude resumes and processes the tool result) and on Reject (when Claude iterates on the plan), so the file always gets cleared. The consumer treats `status=idle` + plan file present (mtime within ~30 min as a safety TTL) as the awaiting-plan state, and prioritises it over the simpler awaiting-permission state.
 
-The hook script is the same one used for `Notification` — it routes by `hook_event_name` (and, for tool events, `tool_name`) read from the JSON stdin payload. One installed command, three settings entries (`Notification`, `PreToolUse[ExitPlanMode]`, `PostToolUse[ExitPlanMode]`). Reference: `hooks/notification.sh`.
+The hook script is the same one used for `Notification` — it routes by `hook_event_name` (and, for tool events, `tool_name`) read from the JSON stdin payload. One installed command, three settings entries (`Notification`, `PreToolUse[ExitPlanMode]`, `PostToolUse[ExitPlanMode]`). Reference: `claude-code/hooks/notification.sh`.
 
 ## Notification hook — surfacing "awaiting permission"
 
@@ -88,7 +88,7 @@ Claude Code fires the `Notification` hook event when it needs the user (permissi
 
 Pattern we use to surface awaiting state without modifying Claude: **the hook drops a tiny `<sessionId>.notify.json` next to the session JSON.** The consumer then treats `status=idle` + notify-mtime within 60 s as "awaiting", and `status=busy` (or stale notify) as "no longer awaiting" — no explicit clear-hook needed.
 
-### Bash — `hooks/notification.sh`
+### Bash — `claude-code/hooks/notification.sh`
 
 Reads stdin via `cat`, extracts `session_id` with `jq -r '.session_id // empty'`, writes `${HOME}/.claude/sessions/${SESSION_ID}.notify.json` with a millisecond timestamp. Echoes `{}` to be polite to other hooks.
 
@@ -107,7 +107,7 @@ Reads stdin via `cat`, extracts `session_id` with `jq -r '.session_id // empty'`
 }
 ```
 
-Multiple Notification entries are fine — Claude fires them all. Idempotent installer pattern (`scripts/install-hook.sh`):
+Multiple Notification entries are fine — Claude fires them all. Idempotent installer pattern (from the pre-3.0 `install-hook.sh`; 3.0 ships the hooks in the plugin's `hooks.json` and `scripts/migrate-settings.mjs` removes these entries):
 
 ```sh
 jq --arg cmd "$HOOK_CMD" '

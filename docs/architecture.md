@@ -57,7 +57,7 @@ The `notification_type` discrimination requires hooks to capture CC's `notificat
 
 The catch-all matcher is load-bearing: `awaitingPermission` is cleared by *any* `PreToolUse`/`PostToolUse` mid-turn (`session-events.ts`), so a permission padlock only clears once a normal tool runs after approval. If a stale `settings.json` registers these tool-specific (the pre-`9dc606c` `ExitPlanMode`/`TodoWrite` matchers) instead, `PostToolUse[Bash]` never fires and the padlock stays stuck until the turn ends. `src/hook-check.ts` guards against exactly this: it verifies the catch-all registration at startup (and on Setup-key appear) and surfaces a warning rather than letting the plugin degrade silently.
 
-To add a new state: register the event in `scripts/install-hook.sh`, add a case in `src/session-events.ts`, and an entry in the `STATES` registry at `src/icons/states.ts`. State priority (see `deriveState()` in `src/sessions.ts`): `finished` > `error` > `awaiting_plan` > `awaiting_permission` > `awaiting_question` > `awaiting` > `subagent` > `working` > `idle`. All `awaiting*` flags win over `busy` because CC keeps the session marked busy while waiting on the user.
+To add a new state: register the event in `claude-code/hooks/hooks.json`, add a case in `src/session-events.ts`, and an entry in the `STATES` registry at `src/icons/states.ts`. State priority (see `deriveState()` in `src/sessions.ts`): `finished` > `error` > `awaiting_plan` > `awaiting_permission` > `awaiting_question` > `awaiting` > `subagent` > `working` > `idle`. All `awaiting*` flags win over `busy` because CC keeps the session marked busy while waiting on the user.
 
 `busy` itself is `rawStatus === "busy"` (the json's own `status` field) OR the reducer's in-turn projection. The fallback matters because `status` is absent from `<pid>.json` on some entrypoints — observed on `entrypoint: "sdk-ts"`, i.e. every SDK/ACP-hosted session — which would otherwise pin those sessions to the `idle` icon for their whole lifetime.
 
@@ -109,15 +109,15 @@ The first time after building you still need to quit + relaunch the SD app once,
 
 ## Hook pipeline
 
-`hooks/notification.sh` does exactly one thing: read the hook payload from stdin, extract `session_id` + `hook_event_name` (+ optional `tool_name`), and append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `<sessionId>.events.ndjson` next to the session JSON files. `SessionStart` truncates the log first; `SessionEnd` unlinks it.
+`claude-code/hooks/notification.sh` does exactly one thing: read the hook payload from stdin, extract `session_id` + `hook_event_name` (+ optional `tool_name`), and append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `<sessionId>.events.ndjson` next to the session JSON files. `SessionStart` truncates the log first; `SessionEnd` unlinks it.
 
 PID liveness handles the case where a CC process dies hard (no `SessionEnd`): the session disappears from display via `state-tracker.ts`'s `prevLiveIds` check, and the orphan event log is cleaned the next time CC reuses that sessionId (`SessionStart` truncate).
 
 ## Project layout
 
 ```
-.
-├── com.julien.claudesessions.sdPlugin/   # canonical Elgato plugin folder
+stream-deck/
+├── com.phmatray.claudedeck.sdPlugin/     # canonical Elgato plugin folder
 │   ├── manifest.json
 │   ├── bin/plugin.js                     # built bundle
 │   ├── imgs/                             # static manifest icons
@@ -141,10 +141,8 @@ PID liveness handles the case where a CC process dies hard (no `SessionEnd`): th
 │   ├── warp-db.ts                        # read-only sqlite3 → (window, tab_index)
 │   └── icons/                            # render pipeline (theme/motifs/states/text/render/usage-icon)
 ├── icons/                                # standalone reference SVGs (one per state)
-├── hooks/
-│   └── notification.sh                   # Bash hook
 └── scripts/
-    ├── install-hook.sh                   # merge hook into ~/.claude/settings.json
+    ├── build-profile.mjs                 # the bundled Claude Deck profile (run by pnpm build)
     ├── link-plugin.sh                    # symlink into the Stream Deck Plugins folder
     ├── unlink-plugin.sh                  # remove the symlink
     ├── reload-plugin.sh                  # touch the reload trigger

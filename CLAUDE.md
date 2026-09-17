@@ -4,25 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Stream Deck plugin that mirrors live Claude Code CLI session state on up to N keys. The runtime is a single Node process (`com.julien.claudesessions.sdPlugin/bin/plugin.js`) launched by the host Stream Deck app. **macOS only**: the plugin folder is symlinked into `~/Library/Application Support/com.elgato.StreamDeck/Plugins/`. README.md covers setup and the user-visible behaviour — read it before changing anything in `scripts/` or `hooks/`.
+A Stream Deck plugin that mirrors live Claude Code CLI session state on up to N keys. Code paths below (`src/`, `scripts/`, `icons/`, the `.sdPlugin` folder) are relative to `stream-deck/`, the Stream Deck plugin; `claude-code/` (the Claude Code plugin: hooks, `claude-ask`, `claude-permission`, skill), `docs/` and `.claude/` sit at the repo root. The runtime is a single Node process (`com.phmatray.claudedeck.sdPlugin/bin/plugin.js`) launched by the host Stream Deck app. **macOS only**: the plugin folder is symlinked into `~/Library/Application Support/com.elgato.StreamDeck/Plugins/`. README.md covers setup and the user-visible behaviour — read it before changing anything in `scripts/` or `claude-code/hooks/`.
 
 ## Common commands
 
 Use **pnpm** (not npm/npx) — see global memory.
 
 ```bash
-pnpm build              # rollup → com.julien.claudesessions.sdPlugin/bin/plugin.js (terser in prod, sourcemaps in watch)
+pnpm build              # rollup → com.phmatray.claudedeck.sdPlugin/bin/plugin.js (terser in prod, sourcemaps in watch)
 pnpm watch              # rollup -w + auto-touches the reload trigger after each rebuild
 pnpm sd:reload          # touch ~/.claude/.claude-deck.reload → plugin self-exits → SD app respawns it (~1s)
 pnpm sd:validate        # @elgato/cli validate manifest + assets
 pnpm sd:link / sd:unlink           # (re)create the symlink into Plugins/
-pnpm install:hook                  # register every event feeding reduceEvents into ~/.claude/settings.json
-pnpm check:hooks                   # diff installed hook config against what install-hook.sh would write
+bash ../scripts/probe-hooks.sh     # is the installed claude-deck Claude Code plugin registering every hook? (reads the real ~/.claude)
 pnpm icons:render       # regenerate icons/*.svg reference assets from src/icons/
 pnpm icons:static       # rasterize manifest PNGs from assets/svg/ via @resvg/resvg-js
 ```
 
-There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, the assert-based `scripts/check-*.mts` (`pnpm exec tsx scripts/check-<name>.mts`), then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.julien.claudesessions.sdPlugin/`.
+There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, the assert-based `scripts/check-*.mts` (`pnpm exec tsx scripts/check-<name>.mts`), then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
 
 First time after building, you still need to quit + relaunch the SD app once so the new bundle picks up the reload-watcher.
 
@@ -161,19 +160,19 @@ A short press on a slot brings the session's terminal forward (`focusSession` in
 
 `pnpm watch` and `pnpm sd:reload` both `touch ~/.claude/.claude-deck.reload`. The plugin polls the file's mtime each second; when it changes, the plugin calls `process.exit(0)` and the SD app respawns it (this is the SD app's normal crash-recovery behaviour, repurposed). `PROCESS_START_MS` guards against looping on startup if the trigger file already exists.
 
-### Hook pipeline (`hooks/` + `scripts/install-hook.sh`)
+### Hook pipeline (`claude-code/hooks/`)
 
-Every registered Claude Code event runs the same hook script (`hooks/notification.sh`). It does exactly one thing: append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `~/.claude/sessions/<sid>.events.ndjson`. There is no mapping table. `SessionStart` truncates the log first (clean reset, bounds long-lived sessions); `SessionEnd` unlinks it.
+Every registered Claude Code event runs the same hook script (`claude-code/hooks/notification.sh`, registered by `claude-code/hooks/hooks.json`). It does exactly one thing: append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `~/.claude/sessions/<sid>.events.ndjson`. There is no mapping table. `SessionStart` truncates the log first (clean reset, bounds long-lived sessions); `SessionEnd` unlinks it.
 
-The plugin reads each session's event log every tick and replays it through the pure state machine in `src/session-events.ts` (`reduceEvents`). That function is the single source of truth for state transitions — adding a new state means one new case there plus registering the event in `install-hook.sh`. No `events.json`, no per-state sidecar files, no mtime/TTL/grace heuristics.
+The plugin reads each session's event log every tick and replays it through the pure state machine in `src/session-events.ts` (`reduceEvents`). That function is the single source of truth for state transitions — adding a new state means one new case there plus registering the event in `claude-code/hooks/hooks.json`. No `events.json`, no per-state sidecar files, no mtime/TTL/grace heuristics.
 
 PID liveness still handles the case where a CC process dies hard (no `SessionEnd`): the session disappears from display via `state-tracker.ts`'s `prevLiveIds` check, and the orphan event log is cleaned the next time CC reuses that sessionId (`SessionStart` truncate).
 
 ## Conventions worth knowing
 
-- TypeScript ESM (`"type": "module"`), Node 20, `strict: true`. Source is `src/**/*.ts`, output is `com.julien.claudesessions.sdPlugin/bin/plugin.js` (single bundled file via rollup).
+- TypeScript ESM (`"type": "module"`), Node 20, `strict: true`. Source is `src/**/*.ts`, output is `com.phmatray.claudedeck.sdPlugin/bin/plugin.js` (single bundled file via rollup).
 - Imports use the `.js` extension even for `.ts` files (NodeNext-style). Don't drop the extension.
-- Five Stream Deck actions are registered: `com.julien.claudesessions.slot` (one key per live CC session, in `src/slot-action.ts`), `com.julien.claudesessions.setup` (a single maintenance key, in `src/setup-action.ts`), and `com.julien.claudesessions.usage.{session,week,models}` (the plan-usage keys, three thin subclasses in `src/usage-action.ts`). All use the `@action({ UUID: "..." })` decorator AND must be passed to `streamDeck.actions.registerAction(...)` — the decorator alone is not enough.
+- Stream Deck actions (all declared in the manifest, registered in `src/plugin.ts` in manifest order) include `com.phmatray.claudedeck.slot` (one key per live CC session, in `src/slot-action.ts`), `com.phmatray.claudedeck.setup` (a single maintenance key, in `src/setup-action.ts`), and `com.phmatray.claudedeck.usage.{session,week,models}` (the plan-usage keys, three thin subclasses in `src/usage-action.ts`); the answer keys `ask.*` live in `src/ask/`, the launcher in `src/launcher/`. All use the `@action({ UUID: "..." })` decorator AND must be passed to `streamDeck.actions.registerAction(...)` — the decorator alone is not enough.
 - The Setup action's key press (and its property inspector "Refresh States" button) calls `refreshNow()` in `plugin.ts`, which `wipeAllEventLogs()` (deletes every `<sid>.events.ndjson` in the sessions dir) then runs an immediate `runSlowTick()`. The PI uses raw WebSocket against the Elgato bridge (`connectElgatoStreamDeckSocket`) — the SDK's TS API is plugin-side only.
 - Stream Deck SDK notes (registration, manifest gotchas, build-info) live in `docs/development.md`; session-introspection internals (the `<pid>.json` schema, liveness, hook patterns) are in the local skill `claude-code-process-introspection` (`.claude/skills/`). Invoke it via the `Skill` tool when relevant.
 - `docs/` holds reference notes (`architecture.md`, `development.md`, `warp-focus.md`).

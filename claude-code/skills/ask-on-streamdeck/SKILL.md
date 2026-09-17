@@ -1,6 +1,6 @@
 ---
 name: ask-on-streamdeck
-description: Use when you need the user to choose between options and they have the Claude Answer Stream Deck plugin installed - puts the choices on the deck's keys and blocks until they press one. Triggers on "ask me on the deck", "put that on the stream deck", "deck question", or a user preference to answer on hardware.
+description: Use when you need the user to choose between options and they have the Claude Deck Stream Deck plugin installed - puts the choices on the deck's keys and blocks until they press one. Triggers on "ask me on the deck", "put that on the stream deck", "deck question", or a user preference to answer on hardware.
 ---
 
 # Ask on the Stream Deck
@@ -11,10 +11,11 @@ on the deck.
 
 ## How to ask
 
-Pipe a JSON spec into `claude-ask` (the plugin puts it on your PATH):
+Pipe a JSON spec into `claude-ask`. It ships in this plugin's `bin/` and is **not** on
+your PATH, so call it by its full path:
 
 ```bash
-cat <<'JSON' | claude-ask
+cat <<'JSON' | "${CLAUDE_PLUGIN_ROOT}/bin/claude-ask"
 {
   "header": "Approach",
   "question": "Retries time out under load. Which fix?",
@@ -26,6 +27,9 @@ cat <<'JSON' | claude-ask
 }
 JSON
 ```
+
+If `${CLAUDE_PLUGIN_ROOT}` is empty in your shell, use the installed copy:
+`ls ~/.claude/plugins/cache/*/claude-deck/*/bin/claude-ask` (take the newest version).
 
 Run it in the **background** so you are not blocked while the user walks to the deck,
 then read the answer when the task completes.

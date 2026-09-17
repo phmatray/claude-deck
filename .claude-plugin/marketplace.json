@@ -10,9 +10,9 @@
     {
       "name": "claude-deck",
       "displayName": "Claude Deck",
-      "description": "Stream Deck for Claude Code: answer questions and permission prompts from the keys.",
-      "version": "2.0.0",
-      "source": "."
+      "description": "Stream Deck for Claude Code: a live session dashboard, and questions and permission prompts answered from the keys.",
+      "version": "3.0.0",
+      "source": "./claude-code"
     }
   ]
 }

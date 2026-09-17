@@ -3,7 +3,8 @@
 # 2 s timeout) and fails if the Stream Deck app logs a device command failure after it.
 # A desynced deck times out every SetBacklight (5 s each) → every page switch lags ~6 s,
 # and the app reads the serial number where the firmware version should be.
-# Fix when red: unplug the deck ≥15 s, replug. Run: sh scripts/check-deck-link.sh
+# Fix when red: unplug the deck ≥15 s, replug. Run: sh scripts/probe-deck-link.sh
+# Probe, not a check: it switches the real deck and reads the real Stream Deck log.
 LOG="$HOME/Library/Logs/ElgatoStreamDeck/StreamDeck.log"
 ASK="$(ls "$HOME"/.claude/plugins/cache/phmatray/claude-deck/*/bin/claude-ask 2>/dev/null | tail -1)"
 [ -x "$ASK" ] || { echo "claude-ask not installed"; exit 2; }

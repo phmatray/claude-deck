@@ -6,7 +6,7 @@
 // The terminal dialog stays up while this runs and whichever answer comes first
 // wins, so this never blocks the keyboard. When the user answers in the terminal
 // instead, the deck question is withdrawn — detected through the session's event
-// log written by the streamdeck-claude status hooks (skipped if absent).
+// log written by the plugin's status hooks (hooks/notification.sh; skipped if absent).
 //
 // stdin   PermissionRequest hook input
 // stdout  {"hookSpecificOutput":{…"decision":{…}}} on a key press, nothing otherwise
