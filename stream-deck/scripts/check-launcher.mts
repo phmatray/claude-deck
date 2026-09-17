@@ -132,12 +132,13 @@ const tmp = mkdtempSync(join(tmpdir(), "claude-deck-launcher-home-"));
 process.env.HOME = tmp;
 copyFileSync(fileURLToPath(new URL("../com.phmatray.claudedeck.sdPlugin/manifest.json", import.meta.url)), join(tmp, "manifest.json"));
 process.chdir(tmp);
-const { LauncherAction } = await import("../src/launcher/launcher-action.ts");
 // Everything above is imported statically, hoisted above `process.env.HOME = tmp`, and env-free
-// for exactly that reason. Assert it before the first write rather than discover a stray
+// for exactly that reason. Assert it before loading the action rather than discover a stray
 // claude_deck_*.toml in the real ~/.warp: a static import reaching env.ts would capture the
-// user's home instead.
+// user's home instead. Before, too, because past this line the SDK swallows what we throw
+// until the handler below is installed.
 assert.equal((await import("../src/env.ts")).HOME, tmp, "the action's HOME is the temp one, not the user's");
+const { LauncherAction } = await import("../src/launcher/launcher-action.ts");
 // The SDK only logs uncaught exceptions: fail loudly instead.
 process.on("uncaughtException", (err) => {
   console.error(err);
