@@ -44,7 +44,11 @@ Two intervals share the same `state-tracker.ts` instance:
 
 `createStateTracker()` owns the cross-tick bookkeeping: `prevLiveIds` (so a session is promoted to `finished` only when it was alive *last tick* — stale junk files from previous CC runs never appear) and `recentlyFinished` (carry-over for `FINISHED_TTL_MS = 3000`ms after death).
 
-State priority for an idle session: `awaiting_plan` > `awaiting` > plain `idle`. See `deriveState()` in `sessions.ts`.
+State priority for an idle session: `awaiting_plan` > `awaiting` > plain `idle`. See `deriveState()` in `sessions.ts`. A question waiting on the deck for the session (`src/ask/queue.ts`, joined by `sessionId` in `tick()`) outranks all of those except `error`, and adds a deck badge to the key.
+
+### Answer keys (`src/ask/`)
+
+`claude-ask` writes one `questions/<id>.json` per question (tmp + rename) and polls `answers/<id>.json`; there is no lock. `queue.ts` watches `questions/` (fs.watch plus a 500 ms poll), drops malformed files, dead `pid`s and expired questions, and orders by `createdAt`. `controller.ts` is the SDK-free state machine (active question, dismissed set, which deck shows the "Claude Deck" profile); `ask.ts` binds it to the SDK; `actions.ts` holds the keys. A short press on a session key with a pending question brings that question up on the key's deck as well as focusing the terminal.
 
 ### Render pipeline (`src/render-loop.ts` + `src/icons/`)
 

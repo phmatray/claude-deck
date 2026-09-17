@@ -19,14 +19,16 @@ Built from two MIT projects, history kept: [k-ibaraki/streamdeck-claude](https:/
 
 The dashboard reads `~/.claude/sessions/<id>.events.ndjson`, one line per hook call written by `claude-code/hooks/notification.sh`.
 
-The answer keys talk to Claude through two files in `~/.claude-ask/`:
+The answer keys talk to Claude through one pair of files per question in `~/.claude-ask/`:
 
-1. Claude runs `claude-ask` with a JSON question. It writes `question.json` and waits.
-2. The Stream Deck plugin sees the file, draws the keys, and switches your deck to its own profile.
-3. You press a key. The plugin writes `answer.json` and switches the deck back.
-4. `claude-ask` prints the answer and exits.
+1. Claude runs `claude-ask` with a JSON question. It writes `questions/<id>.json` (with its session id) and waits.
+2. The Stream Deck plugin sees the file, draws the keys, and switches your deck to its own profile. The session's dashboard key gets a small deck badge.
+3. You press a key. The plugin writes `answers/<id>.json` and moves on to the next pending question, or switches the deck back.
+4. `claude-ask` prints the answer, removes its two files and exits.
 
-No network, no daemon, no polling service. Two files and a file watcher.
+No lock: several sessions can ask at once, and their questions queue on the deck (oldest first). The queue key (`+N`) steps through them, **Retour** puts one aside (it stays pending on its session key; press that key to bring it back), **Terminal** hands it back to the terminal and brings that session's window forward. A dead `claude-ask` or an expired question drops off by itself.
+
+No network, no daemon, no polling service. Files and a file watcher.
 
 ## Requirements
 
@@ -78,22 +80,26 @@ cat <<'JSON' | claude-code/bin/claude-ask
 JSON
 ```
 
-Prints `{"index":0,"label":"Add jitter","cancelled":false}`.
+Prints `{"index":0,"optionId":"0","label":"Add jitter","cancelled":false}`.
 
 | Field | Meaning |
 |---|---|
 | `question` | Full text. Goes to the terminal, not the keys. |
 | `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 items. `label` on the key, `description` in the terminal. |
+| `options` | 1-8 items. `label` on the key, `description` in the terminal, optional `id` (default: the index) returned as `optionId`. |
 | `timeout` | Seconds, default 180. |
 | `context` | Top-left key. Defaults to the current directory's name. |
+
+The session is found by walking up the process tree to the `claude` process (`--session <id>` overrides it).
 
 | Exit | Meaning |
 |---|---|
 | 0 | Answered. |
-| 2 | You pressed "Use terminal". |
-| 3 | Timed out. |
-| 4 | Another question already owns the deck. |
+| 1 | Bad input. |
+| 2 | You pressed "Terminal". |
+| 3 | Timed out, or withdrawn (killed). |
+
+There is no exit 4 any more: a second question queues instead of being refused.
 
 Anything other than 0 means *ask in the terminal instead* — never assume an answer.
 
@@ -101,7 +107,7 @@ Anything other than 0 means *ask in the terminal instead* — never assume an an
 
 |  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
 |---|---|---|---|---|---|---|---|---|
-| **row 0** | context | question | — | — | — | queue | back | Use terminal |
+| **row 0** | context | question | — | — | — | queue | back | Terminal |
 | **row 1** | detail 1 | detail 2 | detail 3 | detail 4 | detail 5 | detail 6 | detail 7 | detail 8 |
 | **row 2** | detail 9 | detail 10 | detail 11 | detail 12 | detail 13 | detail 14 | detail 15 | detail 16 |
 | **row 3** | option 1 | option 2 | option 3 | option 4 | option 5 | option 6 | option 7 | option 8 |
@@ -114,14 +120,14 @@ Unused option keys go dark. With no question pending the whole page is idle:
 
 The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser**, with the command's first words on the question key and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the full command in the terminal before pressing — three words on a key can't tell `git push` from `git push --force`.
 
-Nothing shows with `--dangerously-skip-permissions`, which never asks. There is no "always allow" key, and a prompt that arrives while another question holds the deck stays terminal-only.
+Nothing shows with `--dangerously-skip-permissions`, which never asks. There is no "always allow" key. A prompt that arrives while another question is on the keys queues behind it.
 
 ### Stuck deck
 
-If a session is killed hard enough to skip its cleanup, the deck can stay on the ask profile. This releases it:
+A question whose `claude-ask` died without cleaning up disappears from the deck on its own (the plugin checks the process). To clear every pending question by hand:
 
 ```bash
-rm -f ~/.claude-ask/question.json
+rm -f ~/.claude-ask/questions/*.json
 ```
 
 ### Slow page switches
@@ -207,7 +213,7 @@ The images in this README are rendered from the plugin's own SVG key art with `r
 
 - **Stream Deck XL only.** The bundled profile targets model `20GAT9901` (`DEVICE_MODEL` in `stream-deck/scripts/build-profile.mjs`, `DeviceType` in the manifest). Other sizes need their own profile.
 - **Eight options max.** That is how many option keys the page has.
-- **One question at a time.** A lock file means a second question gets exit code 4 rather than stealing the deck.
+- **One question on the keys at a time.** Others queue behind it; the queue key shows how many.
 - **macOS only**, because that is all this has been tested on. Nothing in it is deeply mac-specific except the paths.
 
 ## License

@@ -1,12 +1,13 @@
 #!/bin/sh
-# Is the deck's control channel healthy? Forces one profile switch (via claude-ask,
-# 2 s timeout) and fails if the Stream Deck app logs a device command failure after it.
+# Is the deck's control channel healthy? Forces one profile switch and back (a claude-ask
+# question that withdraws itself after its 2 s timeout) and fails if the Stream Deck app
+# logs a device command failure after it.
 # A desynced deck times out every SetBacklight (5 s each) → every page switch lags ~6 s,
 # and the app reads the serial number where the firmware version should be.
 # Fix when red: unplug the deck ≥15 s, replug. Run: sh scripts/probe-deck-link.sh
 # Probe, not a check: it switches the real deck and reads the real Stream Deck log.
 LOG="$HOME/Library/Logs/ElgatoStreamDeck/StreamDeck.log"
-ASK="$(ls "$HOME"/.claude/plugins/cache/phmatray/claude-deck/*/bin/claude-ask 2>/dev/null | tail -1)"
+ASK="$(ls "$HOME"/.claude/plugins/cache/phmatray/claude-deck/*/bin/claude-ask 2>/dev/null | sort -V | tail -1)"
 [ -x "$ASK" ] || { echo "claude-ask not installed"; exit 2; }
 T=$(date +%Y-%m-%dT%H:%M:%S)
 printf '%s' '{"header":"Probe","question":"probe","timeout":2,"context":"probe","options":["-"]}' | "$ASK" >/dev/null 2>&1
