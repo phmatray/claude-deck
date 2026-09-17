@@ -1,5 +1,8 @@
 node_modules/
 dist/
 logs/
+*.log
+*.tgz
 .DS_Store
-streamdeck/com.claudeask.streamdeck.sdPlugin/Claude Ask.streamDeckProfile
+stream-deck/com.phmatray.claudedeck.sdPlugin/bin/
+stream-deck/com.phmatray.claudedeck.sdPlugin/*.streamDeckProfile

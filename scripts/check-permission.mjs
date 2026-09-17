@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, write
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const HOOK = new URL("../bin/claude-permission", import.meta.url).pathname;
+const HOOK = new URL("../claude-code/bin/claude-permission", import.meta.url).pathname;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function run(input, home) {

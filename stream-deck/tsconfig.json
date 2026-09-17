@@ -1,0 +1,16 @@
+{
+  "extends": "@tsconfig/node20/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "com.phmatray.claudedeck.sdPlugin/bin",
+    "rootDir": "src",
+    "useDefineForClassFields": false,
+    "moduleResolution": "node",
+    "module": "ESNext",
+    "target": "ES2022",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true
+  },
+  "include": ["src/**/*.ts"]
+}

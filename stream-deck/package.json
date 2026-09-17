@@ -1,0 +1,37 @@
+{
+  "name": "claude-deck-stream-deck",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Deck Stream Deck plugin: session dashboard, usage keys and answer keys",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w --watch.onEnd=\"bash scripts/reload-plugin.sh\"",
+    "icons:render": "tsx scripts/render-icons.mjs",
+    "icons:static": "node scripts/render-static-pngs.mjs",
+    "sd:link": "bash scripts/link-plugin.sh",
+    "sd:unlink": "bash scripts/unlink-plugin.sh",
+    "sd:validate": "streamdeck validate com.phmatray.claudedeck.sdPlugin --no-update-check",
+    "sd:pack": "streamdeck pack com.phmatray.claudedeck.sdPlugin --output ../dist/ --force --no-update-check",
+    "sd:dev": "streamdeck dev",
+    "sd:reload": "bash scripts/reload-plugin.sh",
+    "drill": "tsx scripts/drill-states.ts"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.7.4",
+    "@resvg/resvg-js": "^2.6.2",
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-node-resolve": "^15.2.2",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@tsconfig/node20": "^20.1.2",
+    "@types/node": "~20.15.0",
+    "rollup": "^4.0.2",
+    "tslib": "^2.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^1.0.0"
+  }
+}

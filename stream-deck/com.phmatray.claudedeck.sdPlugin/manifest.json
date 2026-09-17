@@ -1,0 +1,114 @@
+{
+  "Name": "Claude Deck",
+  "Version": "3.0.0.0",
+  "Author": "Philippe Matray",
+  "Description": "Claude Code on a Stream Deck XL: live session dashboard, plan usage, and answer keys for questions and permission prompts.",
+  "Category": "Claude Deck",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "Icon": "imgs/plugin/marketplace",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "CodePath": "bin/plugin.js",
+  "UUID": "com.phmatray.claudedeck",
+  "Actions": [
+    {
+      "Name": "Claude Session Slot",
+      "UUID": "com.phmatray.claudedeck.slot",
+      "Icon": "imgs/actions/slot/icon",
+      "PropertyInspectorPath": "ui/slot.html",
+      "Tooltip": "Live state of a Claude Code session. Press to bring its terminal to the front.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/slot/key",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Claude Setup",
+      "UUID": "com.phmatray.claudedeck.setup",
+      "Icon": "imgs/actions/setup/icon",
+      "PropertyInspectorPath": "ui/setup.html",
+      "Tooltip": "Refresh and configure the Claude Deck plugin. Press to wipe all event logs and re-render every slot.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/setup/key",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Claude Usage: Session (5h)",
+      "UUID": "com.phmatray.claudedeck.usage.session",
+      "Icon": "imgs/actions/usage/icon",
+      "Tooltip": "5-hour usage window of your Claude plan. Press to refresh all usage keys.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/usage/key",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Claude Usage: Week (all models)",
+      "UUID": "com.phmatray.claudedeck.usage.week",
+      "Icon": "imgs/actions/usage/icon",
+      "Tooltip": "Weekly usage window of your Claude plan. Press to refresh all usage keys.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/usage/key",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Claude Usage: Week (per model)",
+      "UUID": "com.phmatray.claudedeck.usage.models",
+      "Icon": "imgs/actions/usage/icon",
+      "Tooltip": "Per-model weekly usage windows. Press to refresh all usage keys.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "imgs/actions/usage/key",
+          "TitleAlignment": "middle",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ]
+}
