@@ -21,6 +21,7 @@ jobs:
           node-version: "20"
 
       # Installs, builds and packs: dist/com.phmatray.claudedeck.streamDeckPlugin.
+      # Needs `zip` on PATH for the bundled profile (ubuntu-latest has it).
       - name: Pack the Stream Deck plugin
         run: scripts/package.sh
 

@@ -1,6 +1,6 @@
 # Development
 
-macOS only, Node 20, pnpm through `corepack pnpm` (the version is pinned in `stream-deck/package.json`). There is no test framework and no lint script: a change is verified by `pnpm build`, `pnpm sd:validate` and the assert-based `check-*` scripts, then `pnpm sd:reload` and a look at the logs.
+macOS only, Node 20, pnpm through `corepack pnpm` (the version is pinned in `stream-deck/package.json`). `jq`, `perl` and `zip` have to be on `PATH`: the hook script uses the first two, and the bundled `.streamDeckProfile` is a zip built by `scripts/build-profile.mjs`. There is no test framework and no lint script: a change is verified by `pnpm build`, `pnpm sd:validate` and the assert-based `check-*` scripts, then `pnpm sd:reload` and a look at the logs.
 
 ## pnpm scripts
 

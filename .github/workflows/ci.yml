@@ -26,6 +26,9 @@ jobs:
         working-directory: stream-deck
         run: corepack pnpm install --frozen-lockfile
 
+      # build-profile.mjs shells out to `zip` (the .streamDeckProfile is a zip), and
+      # the checks below use `jq` and `perl` for the hook script. All three are
+      # preinstalled on ubuntu-latest; a slimmer image has to add them.
       - name: Build (rollup + bundled profile)
         working-directory: stream-deck
         run: corepack pnpm build
