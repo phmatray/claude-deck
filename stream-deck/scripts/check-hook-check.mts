@@ -50,6 +50,19 @@ function fakeHome(edit: {
 
 // ok: the shipped hooks.json registers every event; the user-scope entry wins.
 assert.deepEqual(await checkHooks(fakeHome()), { ok: true, problems: [], warnings: [] });
+// "*" and an omitted matcher are catch-all too
+assert.deepEqual(await checkHooks(fakeHome({
+  hooks: (h) => {
+    h.hooks.PostToolUse[0].matcher = "*";
+    delete h.hooks.Stop[0].matcher;
+  },
+})), { ok: true, problems: [], warnings: [] });
+
+// claude-permission's own claude-ask timeout must expire before Claude Code kills the hook,
+// or a killed hook leaves its question on the deck.
+const askTimeoutS = Number(/const ASK_TIMEOUT_S = (\d+);/.exec(readFileSync(join(repoPlugin, "bin", "claude-permission"), "utf8"))?.[1]);
+const shipped = JSON.parse(readFileSync(join(repoPlugin, "hooks", "hooks.json"), "utf8"));
+assert.ok(askTimeoutS > 0 && shipped.hooks.PermissionRequest[0].hooks[0].timeout > askTimeoutS, "PermissionRequest hook timeout > ASK_TIMEOUT_S");
 
 // plugin disabled, or never enabled
 let r = await checkHooks(fakeHome({ settings: (s) => (s.enabledPlugins["claude-deck@phmatray"] = false) }));

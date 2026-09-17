@@ -14,8 +14,12 @@ const manifest = JSON.parse(readFileSync(path.join(pluginDir, "manifest.json"), 
 // --- manifest actions == @action UUIDs -------------------------------------
 const decorated = readdirSync(path.join(root, "src"), { recursive: true })
   .filter((f) => f.endsWith(".ts"))
-  .flatMap((f) => [...readFileSync(path.join(root, "src", f), "utf8").matchAll(/@action\(\{\s*UUID:\s*"([^"]+)"/g)].map((m) => m[1]));
-assert.deepEqual([...decorated].sort(), manifest.Actions.map((a) => a.UUID).sort(), "manifest Actions and @action UUIDs agree");
+  .flatMap((f) => [...readFileSync(path.join(root, "src", f), "utf8").matchAll(/@action\(\{\s*UUID:\s*"([^"]+)"\s*\}\)\s*export class (\w+)/g)]);
+assert.deepEqual(decorated.map((m) => m[1]).sort(), manifest.Actions.map((a) => a.UUID).sort(), "manifest Actions and @action UUIDs agree");
+// ...and plugin.ts instantiates each one for registerAction: a dropped class builds,
+// validates and starts fine, its key just shows the manifest image and does nothing.
+const pluginTs = readFileSync(path.join(root, "src", "plugin.ts"), "utf8");
+for (const [, uuid, cls] of decorated) assert.ok(pluginTs.includes(`new ${cls}(`), `plugin.ts registers ${cls} (${uuid})`);
 
 // --- the built profile --------------------------------------------------------
 execFileSync(process.execPath, [path.join(root, "scripts", "build-profile.mjs")], { stdio: "ignore" });

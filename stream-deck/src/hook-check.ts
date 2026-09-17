@@ -47,12 +47,13 @@ export interface HookCheckResult {
 type HookGroups = Record<string, unknown>;
 
 /** True if `entry` (a `.hooks[event]` array) registers a command matching `re`
- *  with a catch-all matcher. A tool-specific matcher is treated as NOT
+ *  with a catch-all matcher (`""`, `"*"` or omitted, per the Claude Code hooks
+ *  docs). A tool-specific matcher is treated as NOT
  *  registered — that's the stale-config failure mode this check exists for. */
 function isRegisteredCatchAll(entry: unknown, re: RegExp): boolean {
   return Array.isArray(entry) && entry.some((group) => {
     const { matcher, hooks } = (group ?? {}) as { matcher?: unknown; hooks?: unknown };
-    if (matcher !== undefined && matcher !== "") return false;
+    if (matcher !== undefined && matcher !== "" && matcher !== "*") return false;
     return Array.isArray(hooks) && hooks.some((h) => re.test(String((h as { command?: unknown })?.command ?? "")));
   });
 }

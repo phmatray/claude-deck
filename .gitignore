@@ -6,3 +6,5 @@ logs/
 .DS_Store
 stream-deck/com.phmatray.claudedeck.sdPlugin/bin/
 stream-deck/com.phmatray.claudedeck.sdPlugin/*.streamDeckProfile
+# pre-3.0 build output a merge leaves behind in old checkouts. ponytail: drop one release after 3.0
+/status/com.julien.claudesessions.sdPlugin/bin/

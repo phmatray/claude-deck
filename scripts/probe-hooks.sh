@@ -70,10 +70,10 @@ if ! jq empty "$HOOKS_JSON" 2>/dev/null; then
   summary
 fi
 
-# True when .hooks[$e] has a catch-all group (matcher "" or absent) whose command matches $re.
+# True when .hooks[$e] has a catch-all group (matcher "", "*" or absent) whose command matches $re.
 registered() {
   jq -e --arg e "$1" --arg re "$2" '
-    [.hooks[$e] // [] | .[] | select((.matcher // "") == "") | .hooks[]? | .command // "" | test($re)] | any
+    [.hooks[$e] // [] | .[] | select((.matcher // "") | . == "" or . == "*") | .hooks[]? | .command // "" | test($re)] | any
   ' "$HOOKS_JSON" >/dev/null
 }
 
