@@ -96,7 +96,7 @@ export class AskDetailAction extends AskKey {
   }
 
   protected image(q: Question | null, segment: number): string {
-    return render.detailKey(q ? segmentLines(detailLines(q.detail ?? q.question ?? ""), segment) : []);
+    return render.detailKey(q ? segmentLines(detailLines(q.detail || q.question || ""), segment) : []);
   }
 }
 

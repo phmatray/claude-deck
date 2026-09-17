@@ -8,6 +8,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Resvg } from "@resvg/resvg-js";
 
 const home = mkdtempSync(join(tmpdir(), "claude-deck-pending-"));
 process.env.HOME = home; // before the imports: env.ts reads homedir() at load
@@ -78,6 +79,14 @@ assert.doesNotMatch(svg(false), deckRect);
 assert.match(svg(true, "b7"), /<text x="34" y="19"[^>]*>b7<\/text>/);
 assert.match(svg(false, "b7"), /<text x="16" y="19"[^>]*>b7<\/text>/);
 assert.doesNotMatch(renderIcon({ state: "empty", slot: 1, label: "", deck: true }), deckRect, "never on a free slot");
+
+// the label is a directory name and the badge a session name: a character XML forbids in
+// either one must not cost the key its art (the same escaper the answer keys go through)
+{
+  const art = renderIcon({ state: "awaiting_permission", slot: 1, label: "re\x1bpo", badge: "b\x07" });
+  assert.doesNotThrow(() => new Resvg(art).render(), "a control character still parses");
+  assert.match(art, />re\uFFFDpo</, "and shows as one U+FFFD");
+}
 
 rmSync(home, { recursive: true, force: true });
 console.log("ok: pending question on the dashboard");

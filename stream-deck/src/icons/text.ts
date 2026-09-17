@@ -1,7 +1,14 @@
 import { VIEWPORT_W, VIEWPORT_X } from "./theme.js";
 
 const ESC: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-export const xmlEscape = (s: string) => s.replace(/[&<>"']/g, (c) => ESC[c]);
+
+/** Text for inside an SVG. Every key's text passes here, straight from a command, a path,
+ *  a branch name or a question file: a character XML forbids (ESC from a colour code, BEL…)
+ *  makes the whole document unparseable and the key never renders, so it becomes U+FFFD —
+ *  one column for one, the detail strip stays aligned, and a hidden control character shows
+ *  up rather than vanishing. */
+export const xmlEscape = (s: string) =>
+  s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, "\uFFFD").replace(/[&<>"']/g, (c) => ESC[c]);
 
 /** Average glyph advance as a fraction of the font size. Measured by rasterising
  *  our actual labels: repo and branch names land between 0.40em (`feat/sort-by-

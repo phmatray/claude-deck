@@ -67,6 +67,29 @@ assert.deepEqual(detailLines(""), []);
     RegExp.prototype.exec = exec;
   }
   assert.ok(scanned > 0 && scanned < 1_000, `huge input: early exit (${scanned} tokens scanned)`);
+  // The same payload with no space in it at all (JSON.stringify writes none) is a single
+  // token, so token counting proves nothing: what must stay bounded is how much of it is
+  // cut into graphemes. Count what the segmenter is asked to yield — sixteen keys re-wrap
+  // the text on every repaint, and walking megabytes for twelve lines froze the plugin.
+  const segment = Intl.Segmenter.prototype.segment;
+  let yielded = 0;
+  Intl.Segmenter.prototype.segment = function (this: Intl.Segmenter, s: string) {
+    const segments = segment.call(this, s);
+    return {
+      [Symbol.iterator]: function* () {
+        for (const g of segments) {
+          yielded++;
+          yield g;
+        }
+      },
+    } as Intl.Segments;
+  };
+  try {
+    assert.equal(detailLines("x".repeat(2_000_000)).length, MAX);
+  } finally {
+    Intl.Segmenter.prototype.segment = segment;
+  }
+  assert.ok(yielded < 3 * MAX * W, `space-free input: only the shown part is segmented (${yielded} graphemes)`);
 }
 
 // segments: key k shows its row's lines, cut to columns [c*13, (c+1)*13)

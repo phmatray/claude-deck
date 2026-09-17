@@ -26,7 +26,22 @@ const NBSP = "\u00A0";
 // ponytail: one column per grapheme; wide glyphs (CJK, emoji) push the rest of
 // their line out of step across keys. Measure East Asian width if that shows up.
 const graphemes = new Intl.Segmenter();
-const chars = (s: string): string[] => Array.from(graphemes.segment(s), (g) => g.segment);
+const chars = (s: string, cap = Infinity): string[] => {
+  const out: string[] = [];
+  // Lazily: the segmenter walks the string only as far as it is asked to, and a token
+  // can be far longer than anything that could be shown.
+  for (const { segment } of graphemes.segment(s)) {
+    out.push(segment);
+    if (out.length === cap) break;
+  }
+  return out;
+};
+
+/** How much of one token is worth cutting into graphemes: enough to fill the strip and
+ *  overflow it (the line past it ends the wrap), never more. Text with no space at all —
+ *  `JSON.stringify` of a big MCP payload is one token of megabytes — would otherwise be
+ *  segmented whole for each of the sixteen keys, a second of a repaint to show 12 lines. */
+const TOKEN_CAP = (MAX_LINES + 2) * LINE_WIDTH;
 
 /**
  * The strip's lines: word-wrapped at the row width, tabs as two spaces, newlines
@@ -53,7 +68,7 @@ export function detailLines(text: string): string[] {
     const start = lines.length;
     for (const [token] of p.matchAll(/ +|[^ ]+/g)) {
       if (lines.length > MAX_LINES) break;
-      const t = chars(token);
+      const t = chars(token, TOKEN_CAP);
       if (token.startsWith(" ")) {
         // Spaces at a break are dropped; anywhere else (indentation too) they stay.
         if (line.length + t.length > LINE_WIDTH) wrap();

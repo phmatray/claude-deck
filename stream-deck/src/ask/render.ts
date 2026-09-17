@@ -1,5 +1,6 @@
 /** Key art for the answer keys, as base64 SVG data URLs for `setImage`. */
 
+import { xmlEscape } from "../icons/text.js";
 import { DETAIL_FONT_SIZE, DETAIL_LINE_HEIGHT, DETAIL_PAD_X, LINES_PER_KEY } from "./detail.js";
 import type { QuestionKind } from "./queue.js";
 
@@ -29,18 +30,6 @@ function widthAt(text: string, size: number): number {
   let units = 0;
   for (const ch of text) units += W[ch] ?? 611;
   return (units / 1000) * size * 1.06;
-}
-
-/** Text for inside `<text>`. Every key's text passes here, straight from a command or a
- *  file: a character XML forbids (ESC from a colour code, BEL…) makes the whole SVG
- *  unparseable, so it becomes U+FFFD — one column for one, the detail strip stays aligned,
- *  and a hidden control character in a command shows up rather than vanishing. */
-function esc(s: string): string {
-  return s
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, "\uFFFD")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 // Greedy wrap on measured width. Returns null if a single word cannot fit.
@@ -96,7 +85,7 @@ function block(text: string, { boxW, boxH, centerY, color, maxLines = 3, sizes =
     .map((l, i) => {
       const x = Math.round((SIZE - widthAt(l, size)) / 2);
       const y = Math.round(top + i * lh);
-      return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="bold" fill="${color}">${esc(l)}</text>`;
+      return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="bold" fill="${color}">${xmlEscape(l)}</text>`;
     })
     .join("");
 }
@@ -160,7 +149,7 @@ export function detailKey(lines: string[]): string {
     .slice(0, LINES_PER_KEY)
     .map((l, i) =>
       l.trim()
-        ? `<text x="${DETAIL_PAD_X}" y="${DETAIL_FONT_SIZE + i * DETAIL_LINE_HEIGHT}" font-family="${DETAIL_FONT}" font-size="${DETAIL_FONT_SIZE}" fill="#D6DEE8">${esc(l)}</text>`
+        ? `<text x="${DETAIL_PAD_X}" y="${DETAIL_FONT_SIZE + i * DETAIL_LINE_HEIGHT}" font-family="${DETAIL_FONT}" font-size="${DETAIL_FONT_SIZE}" fill="#D6DEE8">${xmlEscape(l)}</text>`
         : "",
     )
     .join("");

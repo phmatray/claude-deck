@@ -3,6 +3,7 @@
 // Run: pnpm exec tsx scripts/check-ask-render.mts
 import assert from "node:assert/strict";
 import { Resvg } from "@resvg/resvg-js";
+import { DETAIL_FONT_SIZE, DETAIL_LINE_HEIGHT } from "../src/ask/detail.ts";
 import * as render from "../src/ask/render.ts";
 
 const svg = (url: string) => Buffer.from(url.replace(/^data:image\/svg\+xml;base64,/, ""), "base64").toString("utf8");
@@ -36,7 +37,13 @@ assert.match(svg(render.contextKey("repo", "repo-b7")), />repo-b7<\/text>/);
   const texts = [...art.matchAll(/<text x="(\d+)" y="(\d+)"[^>]*font-family="ui-monospace, Menlo, monospace"[^>]*>([^<]*)<\/text>/g)];
   assert.deepEqual(texts.map((t) => t[3]), ["a\u00A0&lt;b&gt;", "&amp;"], "blank lines draw nothing");
   assert.deepEqual(new Set(texts.map((t) => t[1])).size, 1, "one left x for every line");
-  assert.ok(Number(texts[1][2]) > Number(texts[0][2]), "line 4 below line 1");
+  // The exact baselines, not just their order: a blank line draws nothing but still owns
+  // its row, and only that keeps the rows of two neighbouring keys level with each other.
+  assert.deepEqual(
+    texts.map((t) => t[2]),
+    [DETAIL_FONT_SIZE, DETAIL_FONT_SIZE + 3 * DETAIL_LINE_HEIGHT].map(String),
+    "line 4 sits three rows below line 1",
+  );
   assert.ok(!svg(render.detailKey([])).includes("<text"), "no text: a blank key");
 }
 

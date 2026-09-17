@@ -66,8 +66,8 @@ const answerOf = (id: string) => {
   assert.equal(typeof a.answeredAt, "string");
   return { ...a, answeredAt: undefined };
 };
-const key = (id: string, slot: number, settings: object = { slot }) => {
-  const action = { id, device: { id: "xl" }, isKey: () => true, coordinates: { column: slot, row: 3 }, setImage: async (img: string) => void images.set(id, img), showAlert: async () => {} };
+const key = (id: string, slot: number, settings: object = { slot }, row = 3) => {
+  const action = { id, device: { id: "xl" }, isKey: () => true, coordinates: { column: slot, row }, setImage: async (img: string) => void images.set(id, img), showAlert: async () => {} };
   return { action, payload: { settings } } as any;
 };
 const images = new Map<string, string>();
@@ -154,7 +154,7 @@ onConnect();
 assert.equal(switches.length, 1, "already shown: no second switch");
 
 // a second session's question queues behind the first; the queue key counts it
-put(question("q2", { createdAt: at(1_000) }));
+put(question("q2", { createdAt: at(1_000), detail: "", question: "rm -rf build" }));
 await until("q2 queued", () => ask.othersCount() === 1);
 const queueKey = new AskQueueAction();
 queueKey.onWillAppear(key("queue", 0));
@@ -170,6 +170,11 @@ await until("detail keys painted", () => ["detail0", "detail1", "detail8"].every
 assert.match(svg("detail0"), />git\u00A0push\u00A0--fo<\/text>/);
 assert.match(svg("detail1"), />rce\u00A0origin\u00A0ma<\/text>/);
 assert.ok(!svg("detail8").includes("<text"), "row 2: nothing left to show");
+// hand-placed outside the bundled profile, with no segment setting: its position says which
+// columns it holds — row 1 column 1 is segment 1, the same slice as the key set by settings
+detail.onWillAppear(key("detailC", 1, {}, 1));
+await until("hand-placed detail key painted", () => images.has("detailC"));
+assert.equal(svg("detailC"), svg("detail1"));
 
 // header key: coloured by the question's kind; context key: the dashboard's name for the session, unless it repeats the project
 const labels: Record<string, string> = { "s-q1": "repo-b7" };
@@ -191,6 +196,9 @@ await option.onKeyDown(key("opt1", 1));
 assert.deepEqual(answerOf("q1"), { id: "q1", index: 1, optionId: "deny", label: "Refuser", cancelled: false, answeredAt: undefined });
 assert.equal(ask.active()?.id, "q2");
 assert.equal(switches.length, 1, "still on the profile");
+// an empty detail is no detail: the strip falls back to the question, never to blank keys
+await detail.repaint();
+assert.match(svg("detail0"), />rm\u00A0-rf\u00A0build<\/text>/);
 
 // claude-ask reads the answer and removes both files
 rmSync(join(QUESTIONS, "q1.json"));
