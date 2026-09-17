@@ -9,7 +9,7 @@ import streamDeck, {
 import { rm } from "node:fs/promises";
 import { basename } from "node:path";
 import { HOME } from "../env.js";
-import { openUrl } from "../warp-focus.js";
+import type { WarpFocusResult } from "../warp-focus.js";
 import { launcherKeyUrl } from "./render.js";
 import { expandHome, tabConfigPath, tabConfigStem, tabConfigUri, writeTabConfig } from "./tab-config.js";
 
@@ -28,8 +28,13 @@ type LauncherSettings = {
 /** Stem each key currently has on disk, so retargeting one can take its old Tab
  *  Config out of Warp's `+` menu. Warp lists every file in that folder, and the
  *  property inspector saves while the user is still typing — without this, every
- *  pause mid-path would leave a dead entry there forever. In memory only: the
- *  plugin restarting forgets, which costs one orphan, not a wrong file. */
+ *  pause mid-path would leave a dead entry there forever.
+ *
+ *  Its ceiling is that it only knows the keys this process has seen appear: a
+ *  restart forgets them (one orphan left in the `+` menu), and a second key on
+ *  another page or profile has never appeared, so retargeting the visible one
+ *  can delete a config that key shares. Neither breaks a press — its own
+ *  willAppear, and the press itself, write the file back. */
 const stems = new Map<string, string>();
 
 /**
@@ -49,6 +54,11 @@ const stems = new Map<string, string>();
  */
 @action({ UUID: "com.phmatray.claudedeck.launcher" })
 export class LauncherAction extends SingletonAction<LauncherSettings> {
+  /** Injected so a check can press a key without handing the user's Warp a tab. */
+  constructor(private readonly open: (url: string) => Promise<WarpFocusResult>) {
+    super();
+  }
+
   override async onWillAppear(ev: WillAppearEvent<LauncherSettings>): Promise<void> {
     if (!ev.action.isKey()) return;
     await this.apply(ev.action, ev.payload.settings);
@@ -68,7 +78,7 @@ export class LauncherAction extends SingletonAction<LauncherSettings> {
     }
     try {
       const { stem } = await writeTabConfig(HOME, directory, ev.payload.settings.command);
-      const result = await openUrl(tabConfigUri(stem, ev.payload.settings.newWindow === true));
+      const result = await this.open(tabConfigUri(stem, ev.payload.settings.newWindow === true));
       if (!result.matched) {
         streamDeck.logger.warn(`launcher: ${result.reason}`);
         await ev.action.showAlert().catch(() => {});
@@ -84,6 +94,9 @@ export class LauncherAction extends SingletonAction<LauncherSettings> {
     const directory = expandHome(settings.directory ?? "", HOME);
     // Claim the new stem before the first await: two settings changes in flight
     // would otherwise both read the same stale entry and both skip the cleanup.
+    // Only the bookkeeping is ordered, not the files — two applies interleaved
+    // could still leave an orphan. They cannot: the PI debounces 500ms and drops
+    // a repeat payload, so its saves never overlap.
     const stem = directory ? tabConfigStem(directory) : undefined;
     const stale = stems.get(key.id);
     if (stem) stems.set(key.id, stem);

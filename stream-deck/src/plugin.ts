@@ -26,7 +26,7 @@ import {
   AskTerminalAction,
 } from "./ask/actions.js";
 import { ask, pendingQuestion, startAsk } from "./ask/ask.js";
-import { focusSession } from "./warp-focus.js";
+import { focusSession, openUrl } from "./warp-focus.js";
 
 streamDeck.logger.setLevel(LogLevel.DEBUG);
 
@@ -154,7 +154,7 @@ for (const a of [
   slotAction,
   setupAction,
   ...usageActions,
-  new LauncherAction(),
+  new LauncherAction(openUrl),
   askKeys.context,
   askKeys.header,
   askKeys.detail,

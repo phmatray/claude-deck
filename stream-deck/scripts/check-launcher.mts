@@ -1,8 +1,8 @@
 // Self-check: the launcher key — the Warp Tab Config it writes (src/launcher/tab-config.ts),
 // the art it paints (src/launcher/render.ts) and the action that wires the two to the deck
 // (src/launcher/launcher-action.ts). Hermetic: every write goes to a temp HOME, so the real
-// ~/.warp is never touched, and the one thing left out is the press itself — openUrl shells
-// out to `/usr/bin/open warp://…`, which would take over the user's Warp.
+// ~/.warp is never touched, and the press gets a recorder instead of the real openUrl, which
+// shells out to `/usr/bin/open warp://…` and would take over the user's Warp.
 // Run: pnpm exec tsx scripts/check-launcher.mts
 import assert from "node:assert/strict";
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -114,6 +114,13 @@ const saved = [...pi.match(/settings = \{\n([^{}]*)\}/)![1].matchAll(/^\s+(\w+):
 assert.deepEqual(saved.sort(), fields.sort(), "the PI's setSettings keys are exactly the settings LauncherSettings declares");
 // A renamed key there is a permanently dead field here, and validate never notices.
 assert.ok(fields.length >= 4, "…and there are four of them, not a regex that matched nothing");
+// The action reads `newWindow === true`: saved as a string, the checkbox would be stuck off.
+assert.match(pi, /newWindow: document\.getElementById\("newWindow"\)\.checked,/, "the checkbox is saved as a boolean");
+// And the panel only ever opens if the manifest names it. Dropped, the key is unconfigurable
+// for good — `streamdeck validate` checks the file a path points at, never that there is one.
+const manifest = JSON.parse(src("../com.phmatray.claudedeck.sdPlugin/manifest.json"));
+const launcherManifest = manifest.Actions.find((a: { UUID: string }) => a.UUID === "com.phmatray.claudedeck.launcher");
+assert.equal(launcherManifest?.PropertyInspectorPath, "ui/launcher.html", "the manifest wires the launcher key to this property inspector");
 // The panel is torn down with the field still focused: neither change nor blur fires then.
 assert.ok(/addEventListener\("input"/.test(pi), "typing is saved on its own, not only on blur");
 assert.ok(/addEventListener\("pagehide"/.test(pi), "…and flushed when the panel goes away mid-word");
@@ -126,6 +133,11 @@ process.env.HOME = tmp;
 copyFileSync(fileURLToPath(new URL("../com.phmatray.claudedeck.sdPlugin/manifest.json", import.meta.url)), join(tmp, "manifest.json"));
 process.chdir(tmp);
 const { LauncherAction } = await import("../src/launcher/launcher-action.ts");
+// Everything above is imported statically, hoisted above `process.env.HOME = tmp`, and env-free
+// for exactly that reason. Assert it before the first write rather than discover a stray
+// claude_deck_*.toml in the real ~/.warp: a static import reaching env.ts would capture the
+// user's home instead.
+assert.equal((await import("../src/env.ts")).HOME, tmp, "the action's HOME is the temp one, not the user's");
 // The SDK only logs uncaught exceptions: fail loudly instead.
 process.on("uncaughtException", (err) => {
   console.error(err);
@@ -142,7 +154,13 @@ const fakeKey = (id: string, isKey = true) => ({
 });
 const ev = (action: object, settings: object) => ({ action, payload: { settings } }) as any;
 const configs = () => readdirSync(join(tmp, ".warp", "tab_configs")).sort();
-const launcher = new LauncherAction();
+// Stands in for openUrl: same shape, no `/usr/bin/open`.
+const opened: string[] = [];
+let openResult = { matched: true, reason: "ok" };
+const launcher = new LauncherAction(async (url: string) => {
+  opened.push(url);
+  return openResult;
+});
 
 const alpha = join(tmp, "repo", "alpha");
 const alphaKey = fakeKey("alpha-key");
@@ -186,12 +204,30 @@ await launcher.onDidReceiveSettings(ev(fakeKey("dial", false), dialSettings));
 assert.equal(images.has("dial"), false, "a dial is not a launcher key");
 assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "…and writes nothing either");
 
-// The press, with nothing configured: an alert, not a Warp tab. (The configured press
-// runs `open warp://tab_config/…` for real, so it is the lead's live test, not ours.)
+// The press, with nothing configured: an alert, not a Warp tab.
 const emptyKey = fakeKey("empty");
 await launcher.onKeyDown(ev(emptyKey, { directory: " " }));
 assert.equal(alerts.get("empty"), 1, "pressing an unconfigured key alerts");
 assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "…and opens nothing");
+assert.deepEqual(opened, [], "…nothing at all");
+
+// The press, configured. alphaKey points at beta since the retargeting above.
+const betaToml = tabConfigPath(tmp, tabConfigStem(beta));
+rmSync(betaToml); // the user emptied ~/.warp between two presses
+await launcher.onKeyDown(ev(alphaKey, { directory: beta }));
+assert.equal(readFileSync(betaToml, "utf8"), tabConfigToml(beta), "the press puts the config back before opening it");
+assert.deepEqual(opened, [tabConfigUri(tabConfigStem(beta), false)], "…and opens that stem, as a tab in the focused window");
+assert.equal(alerts.get("alpha-key"), undefined, "a press that worked does not alert");
+
+await launcher.onKeyDown(ev(alphaKey, { directory: beta, newWindow: true, command: "claude --resume" }));
+assert.equal(opened.at(-1), tabConfigUri(tabConfigStem(beta), true), "the newWindow checkbox reaches the URI");
+assert.match(readFileSync(betaToml, "utf8"), /^commands = \["claude --resume"\]$/m, "…and the settings reach the file");
+
+// Warp missing, or `open` refusing the scheme: the key says so rather than swallowing it.
+openResult = { matched: false, reason: "open-failed: Unable to find application" };
+await launcher.onKeyDown(ev(alphaKey, { directory: beta }));
+assert.equal(alerts.get("alpha-key"), 1, "an open that failed alerts on the key");
+assert.deepEqual(configs(), [`${tabConfigStem(beta)}.toml`], "…and wrote the config first anyway, for the next try");
 
 rmSync(home, { recursive: true, force: true });
 rmSync(tmp, { recursive: true, force: true });
