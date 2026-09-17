@@ -3,7 +3,7 @@
 // Run: node scripts/check-permission.mjs
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -33,8 +33,10 @@ async function waitQuestion(askDir) {
 const press = (askDir, q, index) =>
   writeFileSync(path.join(askDir, "answer.json"), JSON.stringify({ id: q.id, index, label: q.options[index].label, cancelled: false }));
 
+const homes = [];
 function session(events = []) {
   const home = mkdtempSync(path.join(tmpdir(), "claude-permission-"));
+  homes.push(home);
   mkdirSync(path.join(home, ".claude", "sessions"), { recursive: true });
   const log = path.join(home, ".claude", "sessions", "s1.events.ndjson");
   writeFileSync(log, events.map((e) => JSON.stringify(e) + "\n").join(""));
@@ -85,4 +87,5 @@ const bash = { session_id: "s1", cwd: "/work/horizon-hub", tool_name: "Bash", to
   assert.ok(!existsSync(path.join(askDir, "question.json")));
 }
 
+for (const home of homes) rmSync(home, { recursive: true, force: true });
 console.log("ok: claude-permission");

@@ -12,7 +12,7 @@
  *  scripts/probe-hooks.sh applies the same rules from a shell — keep the two
  *  in sync with each other and with claude-code/hooks/hooks.json. */
 
-import { access, readFile } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { HOME } from "./env.js";
 
@@ -100,9 +100,9 @@ export async function checkHooks(home: string = HOME): Promise<HookCheckResult> 
     .map((event) => `${event} not registered catch-all`);
   if (!isRegisteredCatchAll(hooks.PermissionRequest, PERMISSION_RE)) problems.push("PermissionRequest not registered");
   try {
-    await access(join(installPath, "hooks", "notification.sh"));
+    await access(join(installPath, "hooks", "notification.sh"), constants.X_OK);
   } catch {
-    problems.push("installed plugin has no hooks/notification.sh");
+    problems.push("installed plugin has no executable hooks/notification.sh");
   }
   return { ok: problems.length === 0, problems, warnings };
 }

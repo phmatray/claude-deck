@@ -54,6 +54,8 @@ assert.deepEqual(await checkHooks(fakeHome()), { ok: true, problems: [], warning
 // plugin disabled, or never enabled
 let r = await checkHooks(fakeHome({ settings: (s) => (s.enabledPlugins["claude-deck@phmatray"] = false) }));
 assert.deepEqual([r.ok, r.problems], [false, ["plugin claude-deck not enabled"]]);
+r = await checkHooks(fakeHome({ settings: (s) => (s.enabledPlugins = { "my-claude-deck@x": true }) }));
+assert.deepEqual([r.ok, r.problems], [false, ["plugin claude-deck not enabled"]], "the key must start with claude-deck@");
 temps.push(mkdtempSync(join(tmpdir(), "claude-deck-hookcheck-empty-")));
 r = await checkHooks(temps.at(-1)!);
 assert.deepEqual([r.ok, r.problems, r.warnings], [false, ["plugin claude-deck not enabled"], []]);
@@ -77,12 +79,30 @@ assert.deepEqual(r.problems, [
   "PermissionRequest not registered",
 ]);
 
-// installed copy lost its script
+// registered catch-all, but on the wrong command
+r = await checkHooks(fakeHome({
+  hooks: (h) => {
+    h.hooks.SessionStart[0].hooks[0].command = "${CLAUDE_PLUGIN_ROOT}/hooks/notification.ps1";
+    h.hooks.PermissionRequest[0].hooks[0].command = "${CLAUDE_PLUGIN_ROOT}/bin/claude-ask";
+  },
+}));
+assert.deepEqual([r.ok, r.problems], [false, ["SessionStart not registered catch-all", "PermissionRequest not registered"]]);
+
+// installed copy lost its hooks.json, its script, or the script's exec bit
 {
-  const home = fakeHome();
-  rmSync(join(home, ".claude", "plugins", "cache", "phmatray", "claude-deck", "3.0.0", "hooks", "notification.sh"));
+  const hooksDir = (home: string) => join(home, ".claude", "plugins", "cache", "phmatray", "claude-deck", "3.0.0", "hooks");
+  let home = fakeHome();
+  rmSync(join(hooksDir(home), "hooks.json"));
   r = await checkHooks(home);
-  assert.deepEqual([r.ok, r.problems], [false, ["installed plugin has no hooks/notification.sh"]]);
+  assert.deepEqual([r.ok, r.problems], [false, ["installed plugin has no readable hooks/hooks.json"]]);
+  home = fakeHome();
+  rmSync(join(hooksDir(home), "notification.sh"));
+  r = await checkHooks(home);
+  assert.deepEqual([r.ok, r.problems], [false, ["installed plugin has no executable hooks/notification.sh"]]);
+  home = fakeHome();
+  chmodSync(join(hooksDir(home), "notification.sh"), 0o644);
+  r = await checkHooks(home);
+  assert.deepEqual([r.ok, r.problems], [false, ["installed plugin has no executable hooks/notification.sh"]]);
 }
 
 // legacy settings.json hooks: a warning, not a failure — and reported even when the plugin is off

@@ -22,7 +22,7 @@
 // Usage: node scripts/migrate-profiles.mjs [--dry-run] [--profiles-dir <dir>] [--remove-old-ask-profile]
 // Self-check: node scripts/check-migrate-profiles.mjs
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -57,7 +57,15 @@ function appRunning() {
   }
 }
 // Only the app's own folder is at risk from the running app; a copy elsewhere is fair game.
-if (!dryRun && profilesDir.startsWith(APP_DIR + path.sep) && appRunning()) {
+// Real paths, so a symlink or another letter case can't slip past.
+const real = (p) => {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return p;
+  }
+};
+if (!dryRun && real(profilesDir).startsWith(real(APP_DIR) + path.sep) && appRunning()) {
   console.error("Stream Deck is running: quit the app first, it would overwrite the migrated profiles");
   process.exit(1);
 }

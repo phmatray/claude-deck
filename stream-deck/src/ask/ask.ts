@@ -37,10 +37,11 @@ let repaint: () => void = () => {};
 
 export const currentQuestion = (): Question | null => question;
 
-/** The bundled profile targets the XL, so prefer one; otherwise any connected deck. */
+/** The bundled profile targets the XL, so prefer one; otherwise the first deck
+ *  with a grid of keys (more than one row: not a pedal or a strip of G keys). */
 function targetDevice(): string | undefined {
   const connected = [...streamDeck.devices].filter((d) => d.isConnected);
-  return (connected.find((d) => d.type === DeviceType.StreamDeckXL) ?? connected[0])?.id;
+  return (connected.find((d) => d.type === DeviceType.StreamDeckXL) ?? connected.find((d) => d.size.rows > 1))?.id;
 }
 
 function showProfile(): void {

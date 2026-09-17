@@ -3,7 +3,7 @@
 // Run: pnpm exec tsx scripts/check-focus-stamp.mts
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseEventLog, reduceEvents } from "../src/session-events.ts";
@@ -27,4 +27,5 @@ fire("PreToolUse", { WARP_TERMINAL_SESSION_UUID: "bbbb", TERM_PROGRAM: "WarpTerm
 state = reduceEvents(parseEventLog(readFileSync(join(home, ".claude/sessions/s1.events.ndjson"), "utf8")));
 assert.equal(state.warpSession, "bbbb", "latest uuid wins");
 
+rmSync(home, { recursive: true, force: true });
 console.log("ok: focus stamp");

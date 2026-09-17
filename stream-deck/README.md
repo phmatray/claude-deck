@@ -1,11 +1,11 @@
-# streamdeck-claude
+# Claude Deck — Stream Deck plugin
 
 > A Stream Deck plugin that mirrors live [Claude Code](https://github.com/anthropics/claude-code) CLI session state on as many keys as you assign it.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#compatibility)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933.svg)](https://nodejs.org)
-[![Stream Deck](https://img.shields.io/badge/Stream%20Deck-%E2%89%A56.5-black.svg)](https://www.elgato.com/stream-deck)
+[![Stream Deck](https://img.shields.io/badge/Stream%20Deck-%E2%89%A56.6-black.svg)](https://www.elgato.com/stream-deck)
 
 Each running `claude` CLI session lights up one key on your deck — project name, current state, animated when it's working, pulsing when it needs you. Sessions are ordered so whatever needs you sits on the first key; press a key to page through the rest when there are more sessions than keys.
 
@@ -35,7 +35,7 @@ Each running `claude` CLI session lights up one key on your deck — project nam
 
 | | Support |
 |---|---|
-| **Stream Deck app** | macOS 12+ (Stream Deck app ≥ 6.5) |
+| **Stream Deck app** | macOS 12+ (Stream Deck app ≥ 6.6) |
 | **Claude CLI host** | the same Mac |
 | **Node.js** | ≥ 20 (bundled into the plugin runtime by the Stream Deck app) |
 | **Terminal integration** | Warp exact pane via `warp://session/<uuid>`; VS Code window; cwd → Warp tab fallback |
@@ -55,7 +55,7 @@ pnpm sd:validate
 
 A short press focuses the session's terminal. For Warp, the `warp://session` path needs no extra permission; the cwd-to-tab fallback sends a System Events keystroke, which needs Stream Deck.app under System Settings → Privacy & Security → Accessibility.
 
-The "Claude Sessions" category appears in the action list.
+The "Claude Deck" category appears in the action list.
 
 ## Usage
 

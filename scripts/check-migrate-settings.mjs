@@ -16,13 +16,16 @@ mkdirSync(claudeDir, { recursive: true });
 const run = (...args) => execFileSync(process.execPath, [SCRIPT, ...args], { env: { ...process.env, HOME: home }, encoding: "utf8" });
 const legacy = (cmd) => ({ type: "command", command: cmd });
 const other = { type: "command", command: "/usr/local/bin/my-audit-hook" };
+// Must survive: the regex needs BOTH the project name and notification.(sh|ps1).
+const otherNotify = { type: "command", command: "/opt/other-tool/hooks/notification.sh", timeout: 5 };
+const permission = { type: "command", command: "/Users/me/claude-deck/claude-code/bin/claude-permission" };
 
 const original = {
   model: "opus",
   hooks: {
     SessionStart: [{ matcher: "", hooks: [legacy("/Users/me/claude-deck/status/hooks/notification.sh")] }],
     PreToolUse: [
-      { matcher: "", hooks: [legacy("/Users/me/streamdeck-claude/hooks/notification.sh"), other] },
+      { matcher: "", hooks: [legacy("/Users/me/streamdeck-claude/hooks/notification.sh"), other, otherNotify, permission], _note: "kept" },
       { matcher: "Bash", hooks: [other] },
     ],
     Stop: [{ matcher: "", hooks: [legacy("bash '/home/j/streamdeck-claude/hooks/notification.ps1'")] }, { matcher: "", hooks: [] }],
@@ -49,7 +52,7 @@ assert.ok(text.endsWith("}\n") && text.includes('\n  "model": "opus"'), "2-space
 assert.deepEqual(JSON.parse(text), {
   model: "opus",
   hooks: {
-    PreToolUse: [{ matcher: "", hooks: [other] }, { matcher: "Bash", hooks: [other] }],
+    PreToolUse: [{ matcher: "", hooks: [other, otherNotify, permission], _note: "kept" }, { matcher: "Bash", hooks: [other] }],
     Stop: [{ matcher: "", hooks: [] }],
     Notification: [{ matcher: "", hooks: [other] }],
   },

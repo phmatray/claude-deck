@@ -3,8 +3,8 @@
 // multi-action) and the imported "Claude Ask" profile.
 // Run: node scripts/check-migrate-profiles.mjs
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -129,6 +129,24 @@ mkdirSync(path.join(path.dirname(dir2), backup));
 run(dir2, "--remove-old-ask-profile");
 assert.ok(existsSync(path.join(path.dirname(dir2), backup, "05430350-AE6C-4636-8F07-9FF7D5A991CA.sdProfile", "manifest.json")));
 assert.ok(!existsSync(path.join(dir2, "05430350-AE6C-4636-8F07-9FF7D5A991CA.sdProfile")));
+
+// --- the app's own folder is refused while "Stream Deck" runs, even through a symlink
+const fakeBin = path.join(tmp, "bin");
+mkdirSync(fakeBin);
+writeFileSync(path.join(fakeBin, "pgrep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 }); // "the app is running"
+const appProfiles = fixture("Library/Application Support/com.elgato.StreamDeck");
+symlinkSync(appProfiles, path.join(tmp, "alias"));
+const appBefore = snapshot(appProfiles);
+for (const spelling of [appProfiles, path.join(tmp, "alias")]) {
+  const r = spawnSync(process.execPath, [SCRIPT, "--profiles-dir", spelling], {
+    env: { ...process.env, HOME: tmp, PATH: `${fakeBin}:${process.env.PATH}` },
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 1, `${spelling}: refused`);
+  assert.match(r.stderr, /Stream Deck is running/);
+}
+assert.deepEqual(snapshot(appProfiles), appBefore);
+assert.deepEqual(backupOf(appProfiles), []);
 
 rmSync(tmp, { recursive: true, force: true });
 console.log("ok: migrate-profiles");
