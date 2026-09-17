@@ -36,6 +36,7 @@ Background agents get their own muted variants: `bg_working`, `bg_idle`, `bg_awa
 
 - A Stream Deck XL (model `20GAT9901`), Stream Deck app 6.6 or newer, macOS 12 or newer.
 - Claude Code, Node 20+, `jq`, `perl`.
+- Optional: **Stream Deck** under *System Settings → Privacy & Security → Accessibility*. Only the cwd→Warp-tab fallback of the focus press needs it (it sends a keystroke); `warp://session/<uuid>` works without. Decline and that one fallback is skipped — see [Warp focus](docs/warp-focus.md).
 - To build from source: [pnpm](https://pnpm.io) (`corepack pnpm` is enough).
 
 ## Install

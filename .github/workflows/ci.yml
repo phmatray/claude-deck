@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    # A PR branch would otherwise run the whole job twice per push, and a `v*`
-    # tag would run it next to release.yml.
+    # The integration branches only: a topic branch is already covered by its PR,
+    # and a `v*` tag would run this job next to release.yml. A push to `next`
+    # while its PR is open does run twice — that is the price of CI on `next`.
     branches: [main, next]
   pull_request:
 
