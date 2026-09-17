@@ -72,5 +72,5 @@ terminal) while deciding, and presses the key to answer.
 - **Do not use this for anything a label cannot convey** — approving a specific command,
   confirming a destructive action, or any choice where the exact wording matters. Ask in
   the terminal where the user can read it.
-- One question at a time per session. Other sessions' questions queue on the deck; the
-  user steps through them with the queue key.
+- One question is on the keys at a time; the rest queue behind it, and the user steps
+  through them with the queue key.
