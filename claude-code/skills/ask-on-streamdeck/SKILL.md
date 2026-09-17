@@ -38,7 +38,7 @@ then read the answer when the task completes.
 |---|---|
 | `question` | Full text. Printed in the terminal, not on the keys. |
 | `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal, `id` (optional, defaults to the index) comes back as `optionId`. |
+| `options` | 1-8 entries. `label` goes on the key, `description` prints in the terminal, `id` (optional, defaults to the index) comes back as `optionId`. `id: "terminal"` is reserved: that key acts as the Terminal key (exit 2). |
 | `timeout` | Seconds, default 180. |
 | `context` | Defaults to the current directory's name, shown on the top-left key. |
 

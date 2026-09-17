@@ -106,6 +106,13 @@ assert.deepEqual([files(questionsDir), files(answersDir)], [[], []]);
   assert.equal(qf.pid, f.child.pid);
   f.child.kill("SIGTERM");
   await f.done;
+  // and past an intermediate process, as when the skill runs it from a Bash tool call
+  const sh = spawn("/bin/sh", ["-c", '"$0"; exit $?', CLI], { env: { ...process.env, HOME: home, CLAUDE_ASK_DIR: askDir } });
+  sh.stdin.end(JSON.stringify({ options: ["X"], timeout: 30 }));
+  const qs = await questionOf("from-ancestor");
+  assert.notEqual(qs.pid, sh.pid, "a shell sits between this process and claude-ask");
+  process.kill(qs.pid, "SIGTERM");
+  await new Promise((resolve) => sh.on("exit", resolve));
   // an explicit id wins over the walk
   const g = ask({ sessionId: "explicit", options: ["X"], timeout: 30 });
   await questionOf("explicit");

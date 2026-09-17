@@ -401,6 +401,7 @@ export function deriveState(s: SessionInfo, alive: boolean): SessionState {
  *  statut non-terminal inconnu retombe sur bg_idle. Les statuts terminaux sont
  *  déjà filtrés en amont par la liveness (→ finished/retiré), donc absents ici. */
 function deriveBgState(s: SessionInfo): SessionState {
+  if (s.pendingQuestion) return s.pendingQuestion.kind === "permission" ? "bg_awaiting_permission" : "bg_awaiting";
   const waitingFor = (s.bgWaitingFor ?? "").toLowerCase();
   if (waitingFor.includes("permission")) return "bg_awaiting_permission";
   const status = (s.bgStatus ?? "").toLowerCase();

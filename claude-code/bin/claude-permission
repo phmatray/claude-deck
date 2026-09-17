@@ -82,7 +82,8 @@ const DECISIONS = {
 };
 
 const question = {
-  kind: "permission",
+  // Plan approval keeps its own state on the dashboard (awaiting_plan), not the generic permission one.
+  kind: input.tool_name === "ExitPlanMode" ? "plan" : "permission",
   sessionId: input.session_id,
   header: header(input),
   detail: detail(input),

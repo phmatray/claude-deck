@@ -86,7 +86,7 @@ Prints `{"index":0,"optionId":"0","label":"Add jitter","cancelled":false}`.
 |---|---|
 | `question` | Full text. Goes to the terminal, not the keys. |
 | `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-8 items. `label` on the key, `description` in the terminal, optional `id` (default: the index) returned as `optionId`. |
+| `options` | 1-8 items. `label` on the key, `description` in the terminal, optional `id` (default: the index) returned as `optionId`; `"terminal"` is reserved (acts as the Terminal key, exit 2). |
 | `timeout` | Seconds, default 180. |
 | `context` | Top-left key. Defaults to the current directory's name. |
 

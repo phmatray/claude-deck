@@ -88,8 +88,9 @@ for (const bad of [
   const q = createQueue(dir, (m) => logs.push(m));
   q.start();
   const w = (x: { id: string }, name = `${x.id}.json`) => writeFileSync(join(dir, "questions", name), JSON.stringify(x));
-  w(question("late", { createdAt: at(5_000) }));
-  w(question("early", { createdAt: at(-5_000) }));
+  // alphabetical order is newest first, as a directory listing may return: only the createdAt sort fixes it
+  w(question("newer", { createdAt: at(5_000) }));
+  w(question("older", { createdAt: at(-5_000) }));
   w(question("dead", { pid: deadPid }));
   w(question("expired", { expiresAt: at(-6_000) }));
   w(question("mid-write"), ".mid-write.tmp");
@@ -97,25 +98,25 @@ for (const bad of [
   w(question("mislabelled"), "other-name.json");
   q.refresh();
   q.refresh();
-  assert.deepEqual(q.pending().map((x) => x.id), ["early", "late"], "live and well-formed only, oldest first");
-  assert.equal(q.bySession("s-late")?.id, "late");
+  assert.deepEqual(q.pending().map((x) => x.id), ["older", "newer"], "live and well-formed only, oldest first");
+  assert.equal(q.bySession("s-newer")?.id, "newer");
   assert.equal(q.bySession("s-dead"), undefined);
   assert.equal(logs.filter((l) => l.includes("broken.json")).length, 1, "a malformed file is logged once");
   let changes = 0;
   q.onChange(() => changes++);
-  q.answer("early", 1);
-  assert.deepEqual(q.pending().map((x) => x.id), ["late"], "answered: gone at once, before claude-ask removes the file");
+  q.answer("older", 1);
+  assert.deepEqual(q.pending().map((x) => x.id), ["newer"], "answered: gone at once, before claude-ask removes the file");
   assert.equal(changes, 1);
   q.refresh();
-  assert.deepEqual(q.pending().map((x) => x.id), ["late"], "and stays gone while its file lingers");
-  const early = JSON.parse(readFileSync(join(dir, "answers", "early.json"), "utf8"));
-  assert.deepEqual(Object.keys(early), ["id", "index", "optionId", "label", "cancelled", "answeredAt"]);
-  assert.deepEqual({ ...early, answeredAt: 0 }, { id: "early", index: 1, optionId: "deny", label: "Refuser", cancelled: false, answeredAt: 0 });
-  q.answer("late", 7); // no such option: nothing written
-  assert.ok(!existsSync(join(dir, "answers", "late.json")));
-  q.cancel("late");
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(dir, "answers", "late.json"), "utf8"))), ["id", "cancelled", "reason", "answeredAt"]);
-  assert.deepEqual(readdirSync(join(dir, "answers")).sort(), ["early.json", "late.json"], "atomic: no tmp left behind");
+  assert.deepEqual(q.pending().map((x) => x.id), ["newer"], "and stays gone while its file lingers");
+  const older = JSON.parse(readFileSync(join(dir, "answers", "older.json"), "utf8"));
+  assert.deepEqual(Object.keys(older), ["id", "index", "optionId", "label", "cancelled", "answeredAt"]);
+  assert.deepEqual({ ...older, answeredAt: 0 }, { id: "older", index: 1, optionId: "deny", label: "Refuser", cancelled: false, answeredAt: 0 });
+  q.answer("newer", 7); // no such option: nothing written
+  assert.ok(!existsSync(join(dir, "answers", "newer.json")));
+  q.cancel("newer");
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(join(dir, "answers", "newer.json"), "utf8"))), ["id", "cancelled", "reason", "answeredAt"]);
+  assert.deepEqual(readdirSync(join(dir, "answers")).sort(), ["newer.json", "older.json"], "atomic: no tmp left behind");
   q.stop();
 }
 

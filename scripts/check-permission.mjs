@@ -75,6 +75,18 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
   assert.deepEqual(readdirSync(path.join(askDir, "answers")), [], "answer file removed");
 }
 
+// Plan approval (ExitPlanMode, payload shape as captured live) → kind "plan", so the
+// dashboard keeps awaiting_plan rather than the permission state
+{
+  const { home } = session();
+  const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
+  const { askDir, done } = run(plan, home);
+  const q = await waitQuestion(askDir);
+  assert.equal(q.kind, "plan");
+  press(askDir, q, "deny");
+  assert.equal(decision((await done).out).behavior, "deny");
+}
+
 // Refuser → deny
 {
   const { home } = session();

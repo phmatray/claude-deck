@@ -19,7 +19,7 @@ export const RELOAD_FILE = join(HOME, ".claude", ".claude-deck.reload");
 /** Claude Code user-global settings.json (enabledPlugins, legacy hooks). */
 export const SETTINGS_FILE = join(HOME, ".claude", "settings.json");
 
-/** Where `claude-ask` and the answer keys exchange question.json / answer.json.
+/** Where `claude-ask` and the answer keys exchange questions/<id>.json and answers/<id>.json.
  *  `CLAUDE_ASK_DIR` overrides it, as it does for the CLI. */
 export const ASK_DIR = process.env.CLAUDE_ASK_DIR || join(HOME, ".claude-ask");
 

@@ -17,6 +17,11 @@ process.chdir(home);
 const { createStateTracker } = await import("../src/state-tracker.ts");
 const { deriveState } = await import("../src/sessions.ts");
 const { renderIcon } = await import("../src/icons/index.ts");
+// The SDK's logger swallows uncaught exceptions (a failed assert would exit 0): fail loudly.
+process.on("uncaughtException", (err) => {
+  console.error(err);
+  process.exit(1);
+});
 
 // two live sessions (this process and its parent): "old" started first, "new" later
 const sessions = join(home, ".claude", "sessions");
@@ -43,6 +48,11 @@ assert.deepEqual(await view(), ["new:idle", "old:working"], "gone with the quest
 // error keeps precedence
 const errored = { ...tracker.getEntries()[1].session, errored: true, pendingQuestion: { id: "q", kind: "permission" as const } };
 assert.equal(deriveState(errored, true), "error");
+// a bg agent keeps its bg look but still reads as waiting on you
+const bg = { ...errored, errored: false, kind: "bg" as const, bgStatus: "running" };
+assert.equal(deriveState(bg, true), "bg_awaiting_permission");
+assert.equal(deriveState({ ...bg, pendingQuestion: { id: "q", kind: "ask" as const } }, true), "bg_awaiting");
+assert.equal(deriveState({ ...bg, pendingQuestion: undefined }, true), "bg_working");
 
 // the deck badge: a 14x10 key at the badge position, the b7 badge pushed after it
 const svg = (deck: boolean, badge?: string) => renderIcon({ state: "awaiting_permission", slot: 1, label: "repo", badge, deck });
