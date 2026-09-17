@@ -6,8 +6,8 @@ export const xmlEscape = (s: string) => s.replace(/[&<>"']/g, (c) => ESC[c]);
 /** Average glyph advance as a fraction of the font size. Measured by rasterising
  *  our actual labels: repo and branch names land between 0.40em (`feat/sort-by-
  *  last-activity`, narrow letters) and 0.52em (`main`, wide ones). 0.54 keeps a
- *  margin over the widest sample, because one constant serves two renderers —
- *  SF Pro on macOS, Segoe UI on Windows — and neither is what we measured.
+ *  margin over the widest sample, because the Stream Deck app draws the keys in
+ *  SF Pro, which is not what we measured.
  *  The previous 0.58 overstated every real label by 15-35%, which cost ~3
  *  characters a line and made two branches sharing a prefix render identically. */
 const CHAR_W = 0.54;

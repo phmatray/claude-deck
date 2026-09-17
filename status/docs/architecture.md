@@ -4,14 +4,7 @@ How the plugin discovers Claude Code sessions, derives state, and renders icons.
 
 ## Session discovery
 
-Claude Code drops one JSON file per running CLI session under `~/.claude/sessions/<pid>.json`. The plugin reads that directory once per second, batches a `kill -0 <pid>` check to filter out stale files, sorts the live sessions most-recent-event-first, and renders an SVG per Stream Deck slot via `setImage`.
-
-When the plugin runs on a Windows host, two session directories are scanned in parallel:
-
-- WSL sessions, read over a `\\wsl.localhost\<distro>\…` UNC path. PIDs are checked with `wsl.exe -d <distro> -- kill -0 <pid>`, batched into a single bash invocation.
-- Windows-native sessions, read at `%USERPROFILE%\.claude\sessions`. PIDs are checked with one `tasklist.exe /NH /FO CSV` dump intersected in-process. (Per-PID `/FI "PID eq N"` filters AND together in tasklist — they don't OR — so per-PID filtering is impossible; one big dump is cheaper than N spawns.)
-
-Each `SessionInfo` carries an `origin: "wsl" | "windows"` tag so the right liveness check is applied. A 10s `CACHE_FALLBACK_MS` absorbs transient empty/errored spawns without flickering keys to "finished".
+Claude Code drops one JSON file per running CLI session under `~/.claude/sessions/<pid>.json`. The plugin reads that directory once per second, filters out stale files with an in-process `process.kill(pid, 0)` (`src/live-pids.ts`: no throw or `EPERM` = alive, `ESRCH` = dead), sorts the live sessions most-recent-event-first, and renders an SVG per Stream Deck slot via `setImage`. bg agents skip the pid check: their pid is a shared daemon, so a fresh `updatedAt` and a non-terminal status decide instead.
 
 ### Slot ordering
 
@@ -34,7 +27,7 @@ There are usually more sessions than keys, so the keys render a *window* onto th
 
 The window resets to 0 when a session **newly** enters an `ATTENTION_STATES` state. Edge-triggered, not level-triggered: a session that simply keeps waiting must not re-snap the view every tick, because being able to page past it is exactly what you want while it waits. It also resets when `viewOffset` would fall past the end of a shrinking list. Nothing else moves it — page away from the top and the deck stays there until something needs you.
 
-`tick`'s log line carries `view=<offset>/<total>`, and `maybeLog` dedups on the whole string, so the log records exactly the ticks where the window moved. The explicit tiebreak is load-bearing: sessions restored in one batch share a `SessionStart` ts to the millisecond, and relying on sort stability there would hand the order to `readOneSource`'s `Promise.all` push order, which varies per tick and would repaint every key for nothing.
+`tick`'s log line carries `view=<offset>/<total>`, and `maybeLog` dedups on the whole string, so the log records exactly the ticks where the window moved. The explicit tiebreak is load-bearing: sessions restored in one batch share a `SessionStart` ts to the millisecond, and relying on sort stability there would hand the order to `readSessionFiles`' `Promise.all` push order, which varies per tick and would repaint every key for nothing.
 
 Because slot identity can now change between two ticks, a key press pins the caption it was showing at `KeyDown` (`SlotState.pressedLabel` / `pressedBadge`); the kill target's pid was already captured in `onKeyDown`'s locals.
 
@@ -58,7 +51,7 @@ Every registered Claude Code hook event appends one JSON line to `~/.claude/sess
 | `SubagentStart` / `SubagentStop` | bumps `subagentDepth` ±1 |
 | `SessionEnd` | unlinks the log |
 
-The `notification_type` discrimination requires hooks to capture CC's `notification_type` field into the NDJSON `notifType` column — both `notification.sh` and `notification.ps1` already do this. Older logs without `notifType` fall through to plain `awaiting` (catch-all), so the regression risk is bounded.
+The `notification_type` discrimination requires hooks to capture CC's `notification_type` field into the NDJSON `notifType` column — `notification.sh` does this. Older logs without `notifType` fall through to plain `awaiting` (catch-all), so the regression risk is bounded.
 
 `PreToolUse` and `PostToolUse` are registered with **empty matcher** (catch-all), so the NDJSON gets one line per tool call. The reducer dispatches by `tool_name` — only `ExitPlanMode`, `AskUserQuestion`, and `TodoWrite` produce state transitions; other tools are no-ops. The trade-off is bigger logs (~1 line per Bash/Edit/Read), but `SessionStart` truncates so it stays bounded per CC run.
 
@@ -68,17 +61,9 @@ To add a new state: register the event in `scripts/install-hook.sh`, add a case 
 
 `busy` itself is `rawStatus === "busy"` (the json's own `status` field) OR the reducer's in-turn projection. The fallback matters because `status` is absent from `<pid>.json` on some entrypoints — observed on `entrypoint: "sdk-ts"`, i.e. every SDK/ACP-hosted session — which would otherwise pin those sessions to the `idle` icon for their whole lifetime.
 
-## Path / environment resolution
+## Path resolution
 
-The plugin runs inside the Stream Deck app on Windows where neither `HOME` nor `WSL_DISTRO_NAME` is set. Rollup's `inject-build-env` plugin (in `rollup.config.mjs`) replaces two sentinels — `__BUILD_WSL_HOME__` and `__BUILD_WSL_DISTRO__` — at build time with whatever was live in the WSL build shell. At runtime, real env vars take precedence; the baked values are the fallback. `assertResolved` in `src/env.ts` throws if a sentinel survived (e.g. running an unbuilt module).
-
-**All UNC and path math lives in `src/env.ts` — don't re-derive UNC paths inline elsewhere.**
-
-| Env var | Used for | Override knob |
-|---|---|---|
-| `WSL_DISTRO_NAME` | UNC distro segment + `wsl.exe -d <distro>` | Set in the WSL build shell before `pnpm build` |
-| `HOME` | WSL session dir, baked into UNC path | Set in the WSL build shell before `pnpm build` |
-| `USERPROFILE` | Windows session dir + reload trigger | Provided by Windows; no override |
+Every per-user path lives in `src/env.ts`, derived from `os.homedir()` (which honours `HOME` when set, so checks can run against a temp home): `~/.claude/sessions`, `~/.claude/settings.json`, `~/.claude.json`, the reload trigger `~/.claude/.claude-deck.reload` and the usage refresher's cwd `~/.claude/.claude-deck-usage`. Don't re-derive them elsewhere.
 
 ## Tick loop
 
@@ -95,7 +80,7 @@ The plugin runs inside the Stream Deck app on Windows where neither `HOME` nor `
 
 A key shows one meaning per line: the repo name on top (or the session name the user pinned, when `nameSource` isn't `"derived"`), the current branch below — a short SHA when HEAD is detached, nothing at all outside a repo. The repo name is truncated with an ellipsis when it overflows the 124px viewport — nothing scrolls, because a key is glanced at rather than read and a moving line makes you wait for the part you need. The branch gets one more option first: if it doesn't fit on one line at 17px but does at 15px, it renders whole at the smaller size; only if it still overflows does it wrap onto two 15px lines (breaking after `/` or `-`, never mid-word), with the motif shrinking to make room. `overflows()` is the single width check all three paths share, so they can't disagree; `fitText()` then cuts flush to the band, since `approxWidth()` is a per-char estimate that underruns on wide glyphs. A clip on each line is the backstop for that estimate: on a pathological string (`WWWW…`) the text is cut at both ends and the ellipsis falls off-screen, which is the intended degradation. Claude Code's own derived name is `<cwd basename>-<suffix>`; the suffix is demoted to a top-left badge, sharing that corner with the `bg` tag, because it's the only thing distinguishing two sessions running in the same worktree.
 
-Repo and branch come from `src/git-info.ts`, which reads git's plumbing (`.git/HEAD`, plus `gitdir:`/`commondir` for linked worktrees) instead of spawning `git` — the slow tick runs once a second across every live session. Both the cwd→repo resolution and the parsed HEAD are memoised, the latter gated on (mtime, size) like the caches in `sessions.ts`, and pruned against the live session set. Every path first goes through `localPathForOrigin()` in `env.ts`: a WSL session records `/home/u/proj`, which the Windows-side plugin can only open as `\\wsl.localhost\<distro>\home\u\proj`. Anything unreachable degrades to "no branch line" rather than throwing.
+Repo and branch come from `src/git-info.ts`, which reads git's plumbing (`.git/HEAD`, plus `gitdir:`/`commondir` for linked worktrees) instead of spawning `git` — the slow tick runs once a second across every live session. Both the cwd→repo resolution and the parsed HEAD are memoised, the latter gated on (mtime, size) like the caches in `sessions.ts`, and pruned against the live session set. Anything unreachable degrades to "no branch line" rather than throwing.
 
 Icon code is split per concern across `src/icons/`:
 - `theme.ts` — palette / dimension constants
@@ -118,20 +103,15 @@ epoch resets, `utilization` vs `percent`, model- vs surface-scoped entries).
 
 ## Reload trigger
 
-`pnpm watch` and `pnpm sd:reload` both `touch ~/.claude/.streamdeck-claude.reload`. The plugin polls the file's mtime each second; when it changes, the plugin calls `process.exit(0)` and the Stream Deck app respawns it (this is the SD app's normal crash-recovery behaviour, repurposed). `PROCESS_START_MS` guards against looping on startup if the trigger file already exists.
+`pnpm watch` and `pnpm sd:reload` both `touch ~/.claude/.claude-deck.reload`. The plugin polls the file's mtime each second; when it changes, the plugin calls `process.exit(0)` and the Stream Deck app respawns it (this is the SD app's normal crash-recovery behaviour, repurposed). `PROCESS_START_MS` guards against looping on startup if the trigger file already exists.
 
-The Elgato `streamdeck restart` / `streamdeck list` commands fail from WSL with `EIO` because they `readlink` a UNC-targeted symlink — use `pnpm sd:reload` instead. The first time after building you still need to quit + relaunch the SD app once, since the *currently-running* bundle doesn't yet know how to self-reload.
+The first time after building you still need to quit + relaunch the SD app once, since the *currently-running* bundle doesn't yet know how to self-reload.
 
 ## Hook pipeline
 
-Two thin hook scripts mirror each other:
+`hooks/notification.sh` does exactly one thing: read the hook payload from stdin, extract `session_id` + `hook_event_name` (+ optional `tool_name`), and append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `<sessionId>.events.ndjson` next to the session JSON files. `SessionStart` truncates the log first; `SessionEnd` unlinks it.
 
-- `hooks/notification.sh` — Bash, called by Claude Code on Linux/macOS/WSL.
-- `hooks/notification.ps1` — PowerShell, called by Claude Code on Windows.
-
-Both do exactly one thing: read the hook payload from stdin, extract `session_id` + `hook_event_name` (+ optional `tool_name`), and append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `<sessionId>.events.ndjson` next to that side's session JSON files. `SessionStart` truncates the log first; `SessionEnd` unlinks it.
-
-The Windows hook is **not copied** — `scripts/install-hook.sh --target=windows` registers a PowerShell command that runs `hooks/notification.ps1` directly over `\\wsl.localhost\<distro>\…\hooks\notification.ps1`, so a single repo edit propagates to both sides. PID liveness handles the case where a CC process dies hard (no `SessionEnd`): the session disappears from display via `state-tracker.ts`'s `prevLiveIds` check, and the orphan event log is cleaned the next time CC reuses that sessionId (`SessionStart` truncate).
+PID liveness handles the case where a CC process dies hard (no `SessionEnd`): the session disappears from display via `state-tracker.ts`'s `prevLiveIds` check, and the orphan event log is cleaned the next time CC reuses that sessionId (`SessionStart` truncate).
 
 ## Project layout
 
@@ -147,28 +127,25 @@ The Windows hook is **not copied** — `scripts/install-hook.sh --target=windows
 │   ├── slot-action.ts                    # per-slot SingletonAction
 │   ├── setup-action.ts                   # maintenance key (wipe logs + refresh)
 │   ├── sessions.ts                       # reads ~/.claude/sessions/
-│   ├── live-pids.ts                      # batched kill -0 / tasklist liveness
+│   ├── live-pids.ts                      # process.kill(pid, 0) liveness
 │   ├── session-events.ts                 # pure state machine
 │   ├── state-tracker.ts                  # cross-tick bookkeeping
 │   ├── render-loop.ts                    # zip slots → setImage
 │   ├── usage.ts                          # reads ~/.claude.json usage snapshot
 │   ├── usage-action.ts                   # the three plan-usage keys
 │   ├── usage-refresh.ts                  # spawns `claude -p "/usage"` to refresh it
-│   ├── env.ts                            # all path/UNC math + the CLI's PATH (single source)
+│   ├── env.ts                            # every per-user path + the CLI's PATH (single source)
 │   ├── reload-watcher.ts                 # mtime-driven self-restart
-│   ├── warp-focus.ts                     # platform dispatcher
+│   ├── warp-focus.ts                     # warp://session, VS Code, cwd fallback
 │   ├── warp-focus-mac.ts                 # osascript activate + Cmd+digit / cycle
-│   ├── warp-focus-win.ts                 # PowerShell + AttachThreadInput + SendInput
 │   ├── warp-db.ts                        # read-only sqlite3 → (window, tab_index)
-│   ├── warp-cwd.ts                       # Windows UNC / drive normalizer for WSL paths
 │   └── icons/                            # render pipeline (theme/motifs/states/text/render/usage-icon)
 ├── icons/                                # standalone reference SVGs (one per state)
 ├── hooks/
-│   ├── notification.sh                   # Bash hook (Linux/macOS/WSL)
-│   └── notification.ps1                  # PowerShell hook (Windows)
+│   └── notification.sh                   # Bash hook
 └── scripts/
     ├── install-hook.sh                   # merge hook into ~/.claude/settings.json
-    ├── link-plugin.sh                    # Windows symlink (mklink /D over UNC target)
+    ├── link-plugin.sh                    # symlink into the Stream Deck Plugins folder
     ├── unlink-plugin.sh                  # remove the symlink
     ├── reload-plugin.sh                  # touch the reload trigger
     ├── render-icons.mjs                  # regenerate icons/*.svg from src/icons/
