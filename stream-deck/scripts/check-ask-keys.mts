@@ -67,7 +67,7 @@ const answerOf = (id: string) => {
   return { ...a, answeredAt: undefined };
 };
 const key = (id: string, slot: number) => {
-  const action = { id, isKey: () => true, coordinates: { column: slot, row: 3 }, setImage: async (img: string) => void images.set(id, img), showAlert: async () => {} };
+  const action = { id, device: { id: "xl" }, isKey: () => true, coordinates: { column: slot, row: 3 }, setImage: async (img: string) => void images.set(id, img), showAlert: async () => {} };
   return { action, payload: { settings: { slot } } } as any;
 };
 const images = new Map<string, string>();
@@ -93,15 +93,22 @@ for (const bad of [
   w(question("older", { createdAt: at(-5_000) }));
   w(question("dead", { pid: deadPid }));
   w(question("expired", { expiresAt: at(-6_000) }));
+  w(question("grace", { createdAt: at(-4_000), expiresAt: at(-3_000) })); // claude-ask may still be exiting
+  w(question("newest", { sessionId: "s-newer", createdAt: at(9_000) })); // same session, asked later
   w(question("mid-write"), ".mid-write.tmp");
   writeFileSync(join(dir, "questions", "broken.json"), "{not json");
   w(question("mislabelled"), "other-name.json");
   q.refresh();
   q.refresh();
-  assert.deepEqual(q.pending().map((x) => x.id), ["older", "newer"], "live and well-formed only, oldest first");
-  assert.equal(q.bySession("s-newer")?.id, "newer");
+  assert.deepEqual(q.pending().map((x) => x.id), ["older", "grace", "newer", "newest"], "live and well-formed only, oldest first");
+  assert.equal(q.bySession("s-newer")?.id, "newer", "a session's oldest question");
   assert.equal(q.bySession("s-dead"), undefined);
-  assert.equal(logs.filter((l) => l.includes("broken.json")).length, 1, "a malformed file is logged once");
+  for (const bad of ["broken.json", "other-name.json"]) {
+    assert.equal(logs.filter((l) => l.includes(bad)).length, 1, `a malformed file is logged once: ${bad}`);
+  }
+  rmSync(join(dir, "questions", "grace.json"));
+  rmSync(join(dir, "questions", "newest.json"));
+  q.refresh();
   let changes = 0;
   q.onChange(() => changes++);
   q.answer("older", 1);
@@ -125,11 +132,17 @@ mkdirSync(QUESTIONS, { recursive: true });
 mkdirSync(ANSWERS, { recursive: true });
 for (const f of ["question.json", "answer.json", "lock"]) writeFileSync(join(askDir, f), "{}");
 writeFileSync(join(ANSWERS, "orphan.json"), "{}"); // answered after its claude-ask gave up
+// answered, its claude-ask not done reading it (dead pid only keeps it off the keys here)
+put(question("live", { pid: deadPid }));
+writeFileSync(join(ANSWERS, "live.json"), "{}");
 put(question("q1"));
 const focused: string[] = [];
 startAsk(() => {}, (q) => focused.push(q.id));
 for (const f of ["question.json", "answer.json", "lock"]) assert.ok(!existsSync(join(askDir, f)), `legacy ${f} removed`);
 assert.ok(!existsSync(join(ANSWERS, "orphan.json")), "orphan answer removed");
+assert.ok(existsSync(join(ANSWERS, "live.json")), "an answer whose question is still there is kept");
+rmSync(join(QUESTIONS, "live.json"));
+rmSync(join(ANSWERS, "live.json"));
 assert.equal(ask.active()?.id, "q1", "read at startup");
 assert.equal(pendingQuestion("s-q1")?.id, "q1");
 assert.deepEqual(switches, [], "no connected deck yet");
@@ -167,6 +180,9 @@ await back.onKeyDown(key("back", 0));
 assert.equal(ask.active(), null);
 assert.deepEqual(switches.at(-1), ["xl"], "switch back: no profile name");
 assert.equal(pendingQuestion("s-q2")?.id, "q2", "still pending for its session key");
+await back.onKeyDown(key("back", 0));
+assert.deepEqual(switches.at(-2), ["xl"], "Back again sends its own deck home, whatever the controller thinks");
+assert.deepEqual(switches.at(-1), ["xl"]);
 
 // its session key brings it back, on that key's deck
 assert.ok(ask.showSession("s-q2", "mk2"));

@@ -104,8 +104,14 @@ export function createController(deps: ControllerDeps) {
 
     pressTerminal,
 
-    /** Back key: set the question aside and move on to the next one, or leave the profile. */
-    pressBack(): void {
+    /** Back key on `device`: set the question aside and move on to the next one, or leave the profile. */
+    pressBack(device?: string): void {
+      // The key is on the profile, so its deck is, whatever the flag says: a plugin
+      // restart forgets a deck left there, and Back must still take it home.
+      if (device) {
+        profileShown = true;
+        shownOnDevice = device;
+      }
       if (activeId !== null) dismissed.add(activeId);
       activeId = null;
       sync();
@@ -125,6 +131,12 @@ export function createController(deps: ControllerDeps) {
     showSession(sessionId: string, device: string): boolean {
       const q = deps.pending().find((p) => p.sessionId === sessionId);
       if (!q) return false;
+      // Dashboard keys aren't on the profile, so this deck isn't, whatever the flag says:
+      // switchToProfile is never acknowledged, and the user can leave the profile by hand.
+      if (shownOnDevice === device) {
+        profileShown = false;
+        shownOnDevice = null;
+      }
       activate(q.id, device);
       return true;
     },

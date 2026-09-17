@@ -118,7 +118,7 @@ export class AskBackAction extends AskKey {
   }
 
   override async onKeyDown(ev: KeyDownEvent<AskSettings>): Promise<void> {
-    await this.press(ev, () => ask.pressBack());
+    await this.press(ev, () => ask.pressBack(ev.action.device.id));
   }
 }
 

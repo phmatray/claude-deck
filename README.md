@@ -130,6 +130,8 @@ A question whose `claude-ask` died without cleaning up disappears from the deck 
 rm -f ~/.claude-ask/questions/*.json
 ```
 
+A deck left on "Claude Deck" with nothing pending (the plugin restarted meanwhile): press **Retour**.
+
 ### Slow page switches
 
 ```bash

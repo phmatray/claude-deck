@@ -82,6 +82,11 @@ ask.pressBack();
 assert.equal(activeId(), null);
 assert.deepEqual(lastSwitch(), ["xl"]);
 assert.equal(pending.length, 2, "dismissed questions stay pending");
+// a Back key pressed proves its deck is on the profile, even one the controller forgot
+// (plugin restarted while the deck showed it): it goes back all the same
+const b = switches.length;
+ask.pressBack("xl");
+assert.deepEqual(switches.slice(b), [["xl"]], "Back takes a forgotten deck home");
 arrive(q("e"));
 assert.equal(activeId(), "e", "a new question still comes up by itself");
 ask.pressBack();
@@ -96,6 +101,11 @@ assert.equal(activeId(), "c");
 assert.deepEqual(lastSwitch(), ["mini", "Claude Deck"]);
 assert.ok(ask.showSession("s-d", "xl"), "another deck's key moves the profile there");
 assert.deepEqual(switches.slice(-2), [["mini"], ["xl", "Claude Deck"]]);
+// switchToProfile is never acknowledged and the deck can leave the profile by hand: a
+// dashboard key pressed on the deck believed to show it proves otherwise, so it switches
+const m = switches.length;
+assert.ok(ask.showSession("s-d", "xl"));
+assert.deepEqual(switches.slice(m), [["xl", "Claude Deck"]], "a stale flag never swallows a slot press");
 ask.pressBack(); // d dismissed again; c was undismissed by its press → comes up
 assert.equal(activeId(), "c");
 
