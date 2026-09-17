@@ -7,11 +7,12 @@
  */
 
 // Sized for a 144px key: 13 Menlo glyphs at 17px (0.6em advance) plus the left pad
-// fit the width, 6 lines the height. First guesses, to be tuned for legibility on
-// the hardware; the renderer reads them from here.
+// fit the width, 6 lines of 23px the height. First guesses, to be tuned for
+// legibility on the hardware; the renderer reads them from here, so change them together.
 export const DETAIL_FONT_SIZE = 17;
 export const COLS_PER_KEY = 13;
 export const LINES_PER_KEY = 6;
+export const DETAIL_LINE_HEIGHT = 23;
 export const DETAIL_PAD_X = 6;
 /** Keys per detail row; the strip is two rows of them (segments 0-15). */
 export const KEYS_PER_ROW = 8;

@@ -1,6 +1,6 @@
 /** Key art for the answer keys, as base64 SVG data URLs for `setImage`. */
 
-import { DETAIL_FONT_SIZE, DETAIL_PAD_X, LINES_PER_KEY } from "./detail.js";
+import { DETAIL_FONT_SIZE, DETAIL_LINE_HEIGHT, DETAIL_PAD_X, LINES_PER_KEY } from "./detail.js";
 import type { QuestionKind } from "./queue.js";
 
 const FONT = "Helvetica, Arial, sans-serif";
@@ -143,7 +143,6 @@ export function questionKey(text: string, kind: QuestionKind = "ask"): string {
 }
 
 const DETAIL_FONT = "ui-monospace, Menlo, monospace";
-const DETAIL_LINE_HEIGHT = 23;
 
 /** One key of the detail strip: its slice of the lines (detail.ts), monospace, left
  *  aligned at the same x on every key so columns continue across the row. No frame,
