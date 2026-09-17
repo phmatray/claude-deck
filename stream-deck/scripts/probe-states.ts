@@ -5,6 +5,10 @@
  * ~/.claude/sessions/ so the running Stream Deck plugin walks every
  * SessionState. Visual verification only — see the plan file for context.
  *
+ * A `probe-*`, not a `check-*`: it writes into the REAL ~/.claude that the
+ * running plugin reads, and needs a deck in front of you to mean anything.
+ * Never CI, never an agent session.
+ *
  * Mirrors (not imports) shapes/strings from these sources of truth:
  *   - src/session-events.ts  (event names + reducer behavior)
  *   - src/sessions.ts        (<pid>.json schema + deriveState priority)
@@ -278,9 +282,9 @@ async function runMulti(n: number) {
 
 function usage() {
   console.log(`usage:
-  pnpm drill                       full tour, Enter to advance
-  pnpm drill --state <name>        hold on one state until Ctrl-C
-  pnpm drill --sessions <N>        N parallel sessions, rotating states
+  pnpm probe:states                       full tour, Enter to advance
+  pnpm probe:states --state <name>        hold on one state until Ctrl-C
+  pnpm probe:states --sessions <N>        N parallel sessions, rotating states
 
 <name> ∈ ${NON_FINISHED.join(" | ")}`);
 }

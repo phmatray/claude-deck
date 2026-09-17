@@ -194,7 +194,7 @@ stream-deck/
     ├── build-profile.mjs               the bundled profile (run by pnpm build)
     ├── link-plugin.sh / unlink-plugin.sh / reload-plugin.sh
     ├── render-icons.mjs / render-static-pngs.mjs / render-deck-docs.mts
-    ├── drill-states.ts                 paint every state on a real deck
+    ├── probe-states.ts                 paint every state on a real deck
     └── check-*.mts|mjs                 hermetic self-checks (CI runs these)
 docs/                                   this file, development.md, warp-focus.md, deck-*.png
 .github/workflows/                      ci.yml (every check) and release.yml (tags v*)

@@ -18,7 +18,6 @@ Run these from `stream-deck/`.
 | `pnpm icons:render` | Regenerate `icons/*.svg` reference assets from `src/icons/` |
 | `pnpm icons:static` | Rasterize the manifest PNGs from `assets/svg/` via `@resvg/resvg-js` |
 | `pnpm docs:render` | Regenerate `../docs/deck-{permission,plan,ask}.png` from the answer-key art |
-| `pnpm drill` | Walk the running plugin through every state, for a visual check. Writes fake session files into the **real** `~/.claude/sessions/` — a live tool, like the `probe-*` scripts |
 
 ## Checks and probes
 
@@ -49,6 +48,7 @@ New logic gets one more `check-*` script — the smallest thing that fails if th
 |---|---|
 | `sh scripts/probe-hooks.sh` | The real `~/.claude`: is the installed `claude-deck` plugin registering every hook? Same rules as `src/hook-check.ts`. |
 | `sh scripts/probe-deck-link.sh` | The real deck: forces a page switch and reads the Stream Deck log to tell a slow deck from a desynced one. |
+| `pnpm probe:states` (from `stream-deck/`) | The real deck *and* the real `~/.claude`: writes fake session files into `~/.claude/sessions/` so the running plugin walks every state, for a visual check. |
 
 ## Reload flow
 
