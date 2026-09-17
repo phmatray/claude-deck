@@ -45,6 +45,7 @@ Background agents get their own muted variants: `bg_working`, `bg_idle`, `bg_awa
 Download `com.phmatray.claudedeck.streamDeckPlugin` from the [latest release](https://github.com/phmatray/claude-deck/releases/latest) and double-click it. Or build it yourself:
 
 ```bash
+git clone https://github.com/phmatray/claude-deck && cd claude-deck
 scripts/package.sh
 open dist/com.phmatray.claudedeck.streamDeckPlugin
 ```
@@ -68,7 +69,7 @@ Only needed for questions Claude asks on its own initiative — permission promp
 
 ## Upgrading from the two-plugin setup
 
-Before 3.0 this was two Stream Deck plugins (`com.julien.claudesessions` for the dashboard, `com.claudeask.streamdeck` for the answer keys) and a set of hook commands copied into `~/.claude/settings.json`. 3.0 is one Stream Deck plugin and one Claude Code plugin. Two scripts move you over; both back up before they touch anything and both take `--dry-run`.
+Before 3.0 this was two Stream Deck plugins (`com.julien.claudesessions` for the dashboard, `com.claudeask.streamdeck` for the answer keys) and a set of hook commands copied into `~/.claude/settings.json`. 3.0 is one Stream Deck plugin and one Claude Code plugin. Two scripts move you over; both back up before they touch anything and both take `--dry-run`. They live in the repository, so the steps below assume a checkout (`git clone https://github.com/phmatray/claude-deck && cd claude-deck`) — the release download alone does not bring them.
 
 1. **Quit the Stream Deck app.** It rewrites its own profile files, and would overwrite the migration. `migrate-profiles.mjs` refuses to run on the app's folder while it is up.
 
@@ -130,7 +131,7 @@ No lock: several sessions can ask at once, and their questions queue on the deck
 
 **Claude Usage: Session (5 h) / Week (all models) / Week (per model)** — the plan's rate-limit windows, read from the snapshot Claude Code caches in `~/.claude.json`: no credentials, no network call. Colour steps green → amber → orange → red. The footer says `limite atteinte` at 100 %, otherwise `limite ~HH:MM` (`limite ~jeu 14:30` on the weekly key) — a stateless projection of when the burn rate so far runs you out — and falls back to the countdown to the reset when there is nothing to project. Claude Code only refetches that snapshot when something asks to *see* usage, which a GUI-hosted session never does, so the plugin refreshes it itself by running `claude -p "/usage"` every 5½ minutes while a usage key is on the deck. Pressing any of them forces a refresh past that throttle; the key answers with a tick or an alert, since a refresh often legitimately cannot move the number.
 
-**Claude Launcher** — opens a project in Warp with `claude` already running. Set `directory` (absolute, or `~/…`), and optionally a `label`, a `command` (default `claude`) and `newWindow`, in the key's property inspector. The key writes `~/.warp/tab_configs/claude_deck_<slug>.toml` and presses open `warp://tab_config/<slug>`. An unconfigured key reads **Dossier ?**.
+**Claude Launcher** — opens a project in Warp with `claude` already running. Set `directory` (absolute, or `~/…`), and optionally a `label`, a `command` (default `claude`) and `newWindow`, in the key's property inspector. The key writes `~/.warp/tab_configs/claude_deck_<slug>.toml` and presses open `warp://tab_config/claude_deck_<slug>`. An unconfigured key reads **Dossier ?**.
 
 ### Answer keys
 
