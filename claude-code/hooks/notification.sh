@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Claude Code hook bridge for the streamdeck-claude plugin.
+# Claude Code hook bridge for the Claude Deck session dashboard.
 #
-# Appends one JSON line per hook fire to <sid>.events.ndjson. The plugin
-# reads the file each tick and replays the event stream through a state
-# machine in src/session-events.ts to derive the icon state. To add a new
-# event: register it in scripts/install-hook.sh + handle it in
+# Appends one JSON line per hook fire to <sid>.events.ndjson. The Stream Deck
+# plugin reads the file each tick and replays the event stream through a state
+# machine in stream-deck/src/session-events.ts to derive the icon state. To add
+# a new event: register it in claude-code/hooks/hooks.json (and in
+# REQUIRED_HOOK_EVENTS, stream-deck/src/hook-check.ts) + handle it in
 # session-events.ts. No mapping table here.
 #
-# SessionStart truncates the log (clean reset). SessionEnd unlinks it.
+# SessionStart truncates the log (clean reset). SessionEnd unlinks it — keep that
+# path cheap: Claude Code gives all SessionEnd hooks a shared 1.5 s budget.
 
 set -euo pipefail
 

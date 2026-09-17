@@ -1,13 +1,16 @@
 {
-  "description": "Answer Claude Code permission prompts from the Stream Deck (Autoriser / Refuser)",
+  "description": "Claude Deck: session dashboard event log + permission prompts on the Stream Deck",
   "hooks": {
-    "PermissionRequest": [
-      {
-        "matcher": "",
-        "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/claude-permission", "timeout": 120 }
-        ]
-      }
-    ]
+    "PermissionRequest": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/bin/claude-permission", "args": [], "timeout": 120 }] }],
+    "SessionStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "Notification": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "StopFailure": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "SubagentStart": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "SubagentStop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }],
+    "SessionEnd": [{ "matcher": "", "hooks": [{ "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification.sh", "args": [] }] }]
   }
 }

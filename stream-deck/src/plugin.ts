@@ -192,10 +192,11 @@ streamDeck.logger.info(`claude-deck plugin started, polling=${POLL_MS}ms anim=${
 // Surface stale/missing hook registration loudly — otherwise the plugin runs
 // fine but renders wrong icons (e.g. a permission padlock that never clears
 // because PostToolUse isn't catch-all). The Setup key also badges this.
-checkHooks().then(({ ok, problems }) => {
+checkHooks().then(({ ok, problems, warnings }) => {
   if (!ok) {
     streamDeck.logger.warn(`hook config check failed — ${HOOK_FIX_HINT}\n  ${problems.join("\n  ")}`);
   }
+  for (const w of warnings) streamDeck.logger.warn(`hook config: ${w}`);
 }).catch((err) => {
   streamDeck.logger.warn(`hook config check threw: ${err instanceof Error ? err.message : String(err)}`);
 });

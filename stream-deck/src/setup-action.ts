@@ -33,7 +33,7 @@ export interface RefreshResult {
 @action({ UUID: "com.phmatray.claudedeck.setup" })
 export class SetupAction extends SingletonAction {
   private refreshing = false;
-  /** Last hook-check problem set we logged, to avoid warning on every appear. */
+  /** Last hook-check problems + warnings we logged, to avoid warning on every appear. */
   private lastHookProblems = "";
 
   constructor(private readonly refreshNow: () => Promise<RefreshResult>) {
@@ -69,18 +69,15 @@ export class SetupAction extends SingletonAction {
 
   private async applyHookBadge(action: BadgeableAction): Promise<void> {
     try {
-      const { ok, problems } = await checkHooks();
-      if (ok) {
-        this.lastHookProblems = "";
-        await action.setImage(); // revert to manifest icon
-        return;
-      }
-      const key = problems.join("|");
+      const { ok, problems, warnings } = await checkHooks();
+      const key = [...problems, ...warnings].join("|");
       if (key !== this.lastHookProblems) {
         this.lastHookProblems = key;
-        streamDeck.logger.warn(`hook config check failed — ${HOOK_FIX_HINT}\n  ${problems.join("\n  ")}`);
+        if (!ok) streamDeck.logger.warn(`hook config check failed — ${HOOK_FIX_HINT}\n  ${problems.join("\n  ")}`);
+        for (const w of warnings) streamDeck.logger.warn(`hook config: ${w}`);
       }
-      await action.setImage(HOOK_WARNING_IMAGE);
+      // Warnings don't break the icons, so only problems badge the key.
+      await (ok ? action.setImage() : action.setImage(HOOK_WARNING_IMAGE)); // no argument = manifest icon
     } catch (err) {
       streamDeck.logger.warn(`hook badge update failed: ${err instanceof Error ? err.message : String(err)}`);
     }

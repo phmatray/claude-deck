@@ -1,39 +1,28 @@
 #!/usr/bin/env bash
-# Verify that the streamdeck-claude hook is registered in Claude Code's
-# ~/.claude/settings.json — every event the state machine cares about, with
-# the right matcher, pointing at the right script. Run after `pnpm install:hook`
-# to confirm the install actually took.
+# Is the claude-deck Claude Code plugin wired up on THIS machine? Reads the real
+# ~/.claude state, so it is a probe, not a CI check. Same rules as
+# stream-deck/src/hook-check.ts (hermetic test: stream-deck/scripts/check-hook-check.mts):
+#   1. settings.json enabledPlugins has claude-deck@<marketplace> = true
+#   2. plugins/installed_plugins.json has that key (user scope preferred)
+#   3. <installPath>/hooks/hooks.json registers the 10 status events catch-all on
+#      .../hooks/notification.sh, and PermissionRequest on .../bin/claude-permission
+#   4. the installed notification.sh exists and is executable
+# Warns (does not fail) when settings.json still carries the pre-3.0 hooks.
 #
-# Exit code: 0 if everything is wired up, 1 otherwise.
-#
-# Usage:
-#   bash scripts/check-hooks.sh
+# Exit code: 0 if everything is wired up, 1 otherwise, 2 without jq.
+# Usage: bash scripts/probe-hooks.sh
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-
-# event|matcher pairs — must stay in sync with scripts/install-hook.sh
-EXPECTED_EVENTS=(
-  "SessionStart|"
-  "Notification|"
-  "PreToolUse|"
-  "PostToolUse|"
-  "Stop|"
-  "StopFailure|"
-  "UserPromptSubmit|"
-  "SubagentStart|"
-  "SubagentStop|"
-  "SessionEnd|"
-)
-
-HOOK="${ROOT}/hooks/notification.sh"
-HOOK_REGEX="(streamdeck-claude|claude-deck).*notification\\.sh"
+EVENTS=(SessionStart Notification PreToolUse PostToolUse Stop StopFailure UserPromptSubmit SubagentStart SubagentStop SessionEnd)
+CLAUDE_DIR="${HOME}/.claude"
+SETTINGS="${CLAUDE_DIR}/settings.json"
+INSTALLED="${CLAUDE_DIR}/plugins/installed_plugins.json"
 
 if [ -t 1 ]; then
-  GREEN=$'\e[32m'; RED=$'\e[31m'; YELLOW=$'\e[33m'; DIM=$'\e[2m'; BOLD=$'\e[1m'; RESET=$'\e[0m'
+  GREEN=$'\e[32m'; RED=$'\e[31m'; YELLOW=$'\e[33m'; BOLD=$'\e[1m'; RESET=$'\e[0m'
 else
-  GREEN=""; RED=""; YELLOW=""; DIM=""; BOLD=""; RESET=""
+  GREEN=""; RED=""; YELLOW=""; BOLD=""; RESET=""
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -45,68 +34,58 @@ ALL_OK=1
 ok()   { echo "  ${GREEN}✓${RESET} $1"; }
 fail() { echo "  ${RED}✗${RESET} $1"; ALL_OK=0; }
 warn() { echo "  ${YELLOW}!${RESET} $1"; }
-
-check_settings() {
-  local label="$1" settings="$2" hook_regex="$3"
+summary() {
   echo
-  echo "${BOLD}${label}${RESET} ${DIM}— ${settings}${RESET}"
-
-  if [ ! -f "$settings" ]; then
-    fail "settings.json missing — run the matching install:hook script"
-    return
+  if [ "$ALL_OK" -eq 1 ]; then
+    echo "${GREEN}${BOLD}All hooks verified.${RESET}"
+    exit 0
   fi
-  if ! jq empty "$settings" 2>/dev/null; then
-    fail "settings.json is not valid JSON"
-    return
-  fi
-
-  for entry in "${EXPECTED_EVENTS[@]}"; do
-    local event="${entry%%|*}"
-    local matcher="${entry#*|}"
-    local label_matcher="${matcher:-no matcher}"
-
-    # Find every streamdeck-claude command registered for (event, matcher).
-    # Treat empty/missing matcher as "" — install-hook.sh writes "" explicitly.
-    local cmds
-    cmds="$(jq -r --arg e "$event" --arg m "$matcher" --arg re "$hook_regex" '
-      .hooks[$e] // []
-      | map(select((.matcher // "") == $m))
-      | map(.hooks[]?.command // empty)
-      | map(select(test($re)))
-      | .[]
-    ' "$settings" 2>/dev/null || true)"
-
-    if [ -z "$cmds" ]; then
-      fail "${event}[${label_matcher}] — not registered"
-    else
-      local count
-      count="$(printf '%s\n' "$cmds" | wc -l)"
-      if [ "$count" -gt 1 ]; then
-        warn "${event}[${label_matcher}] — registered ${count}× (duplicate); first: $(printf '%s\n' "$cmds" | head -1)"
-      else
-        ok "${event}[${label_matcher}]"
-      fi
-    fi
-  done
+  echo "${RED}${BOLD}Hooks are missing or misconfigured.${RESET} Fix: claude plugin install claude-deck@phmatray"
+  exit 1
 }
 
-# --- Hook scripts on disk -------------------------------------------------
-echo "${BOLD}Hook scripts${RESET}"
-if [ -f "$HOOK" ] && [ -x "$HOOK" ]; then
-  ok "$HOOK (executable)"
-else
-  fail "$HOOK (missing or not executable)"
+echo "${BOLD}Claude Code plugin${RESET}"
+
+if jq -e '[.hooks // {} | .[] | .[]? | .hooks[]? | .command // "" | test("(streamdeck-claude|claude-deck).*notification\\.(sh|ps1)")] | any' "$SETTINGS" >/dev/null 2>&1; then
+  warn "legacy hooks in settings.json: every event is logged twice; run scripts/migrate-settings.mjs"
 fi
 
-# --- Settings -------------------------------------------------------------
-check_settings "Hooks (${USER:-?})" "${HOME}/.claude/settings.json" "$HOOK_REGEX"
-
-# --- Summary --------------------------------------------------------------
-echo
-if [ "$ALL_OK" -eq 1 ]; then
-  echo "${GREEN}${BOLD}All hooks verified.${RESET}"
-  exit 0
-else
-  echo "${RED}${BOLD}Some hooks are missing or misconfigured.${RESET} Re-run pnpm install:hook."
-  exit 1
+KEY="$(jq -r '.enabledPlugins // {} | to_entries[] | select((.key | test("^claude-deck@")) and .value == true) | .key' "$SETTINGS" 2>/dev/null | head -1 || true)"
+if [ -z "$KEY" ]; then
+  fail "plugin claude-deck not enabled (${SETTINGS})"
+  summary
 fi
+ok "$KEY enabled"
+
+INSTALL_PATH="$(jq -r --arg k "$KEY" '(.plugins[$k] // []) as $e | (($e | map(select(.scope == "user")) | first) // ($e | first) // {}) | .installPath // empty' "$INSTALLED" 2>/dev/null || true)"
+if [ -z "$INSTALL_PATH" ]; then
+  fail "plugin $KEY not installed (${INSTALLED})"
+  summary
+fi
+ok "installed at $INSTALL_PATH"
+
+HOOKS_JSON="${INSTALL_PATH}/hooks/hooks.json"
+if ! jq empty "$HOOKS_JSON" 2>/dev/null; then
+  fail "installed plugin has no readable hooks/hooks.json"
+  summary
+fi
+
+# True when .hooks[$e] has a catch-all group (matcher "" or absent) whose command matches $re.
+registered() {
+  jq -e --arg e "$1" --arg re "$2" '
+    [.hooks[$e] // [] | .[] | select((.matcher // "") == "") | .hooks[]? | .command // "" | test($re)] | any
+  ' "$HOOKS_JSON" >/dev/null
+}
+
+for event in "${EVENTS[@]}"; do
+  if registered "$event" '/hooks/notification\.sh$'; then ok "$event"; else fail "$event not registered catch-all"; fi
+done
+if registered PermissionRequest '/bin/claude-permission$'; then ok "PermissionRequest"; else fail "PermissionRequest not registered"; fi
+
+if [ -x "${INSTALL_PATH}/hooks/notification.sh" ]; then
+  ok "hooks/notification.sh (executable)"
+else
+  fail "installed plugin has no executable hooks/notification.sh"
+fi
+
+summary
