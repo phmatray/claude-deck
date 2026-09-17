@@ -26,7 +26,7 @@ pnpm docs:render        # regenerate ../docs/deck-{permission,plan,ask}.png from
 
 There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, then every self-check, then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
 
-`check-*` scripts are hermetic (temp `HOME`, temp `CLAUDE_ASK_DIR`) and are what CI runs: `.mts` under tsx from `stream-deck/` (`pnpm exec tsx scripts/check-<name>.mts`), `.mjs` under plain node (`stream-deck/scripts/check-profile.mjs`, and the five at the repo root: `node scripts/check-<name>.mjs`). `probe-*` scripts need the real deck or the real `~/.claude` and are for a human at the hardware — never run them from an agent session, and never put one in CI. Non-trivial new logic leaves one new `check-*` behind, listed by name in `.github/workflows/ci.yml`.
+`check-*` scripts are hermetic (temp `HOME`, temp `CLAUDE_ASK_DIR`) and are what CI runs: `.mts` under tsx from `stream-deck/` (`pnpm exec tsx scripts/check-<name>.mts`), `.mjs` under plain node (`stream-deck/scripts/check-profile.mjs`, and the six at the repo root: `node scripts/check-<name>.mjs`). `probe-*` scripts need the real deck or the real `~/.claude` and are for a human at the hardware — never run them from an agent session, and never put one in CI. Non-trivial new logic leaves one new `check-*` behind, listed by name in `.github/workflows/ci.yml`.
 
 First time after building, you still need to quit + relaunch the SD app once so the new bundle picks up the reload-watcher.
 

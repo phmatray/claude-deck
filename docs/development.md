@@ -1,6 +1,6 @@
 # Development
 
-macOS only, Node 20, pnpm through `corepack pnpm` (the version is pinned in `stream-deck/package.json`). `jq`, `perl` and `zip` have to be on `PATH`: the hook script uses the first two, and the bundled `.streamDeckProfile` is a zip built by `scripts/build-profile.mjs`. There is no test framework and no lint script: a change is verified by `pnpm build`, `pnpm sd:validate` and the assert-based `check-*` scripts, then `pnpm sd:reload` and a look at the logs.
+macOS only, Node 20, pnpm through `corepack pnpm` (the version is pinned in `stream-deck/package.json`). `jq`, `perl`, `zip` and `unzip` have to be on `PATH`: the hook script uses the first two, the bundled `.streamDeckProfile` is a zip built by `scripts/build-profile.mjs`, and `check-profile.mjs` reads that archive back. There is no test framework and no lint script: a change is verified by `pnpm build`, `pnpm sd:validate` and the assert-based `check-*` scripts, then `pnpm sd:reload` and a look at the logs.
 
 ## pnpm scripts
 
@@ -38,6 +38,7 @@ node scripts/check-ask-queue.mjs                    # two sessions, answered out
 node scripts/check-migrate-profiles.mjs             # migrate-profiles against a fixture
 node scripts/check-migrate-settings.mjs             # migrate-settings against a temp HOME
 node scripts/check-permission.mjs                   # claude-permission's whole decision table
+node scripts/check-ci-scripts.mjs                   # ci.yml lists every check and no probe
 ```
 
 New logic gets one more `check-*` script — the smallest thing that fails if the logic breaks. `.github/workflows/ci.yml` lists every one of them by name; add yours there too.

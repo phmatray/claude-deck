@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+    # A PR branch would otherwise run the whole job twice per push, and a `v*`
+    # tag would run it next to release.yml.
+    branches: [main, next]
   pull_request:
 
 permissions:
@@ -26,9 +29,10 @@ jobs:
         working-directory: stream-deck
         run: corepack pnpm install --frozen-lockfile
 
-      # build-profile.mjs shells out to `zip` (the .streamDeckProfile is a zip), and
-      # the checks below use `jq` and `perl` for the hook script. All three are
-      # preinstalled on ubuntu-latest; a slimmer image has to add them.
+      # build-profile.mjs shells out to `zip` (the .streamDeckProfile is a zip),
+      # check-profile.mjs reads that archive back with `unzip`, and the checks below
+      # use `jq` and `perl` for the hook script. All four are preinstalled on
+      # ubuntu-latest; a slimmer image has to add them.
       - name: Build (rollup + bundled profile)
         working-directory: stream-deck
         run: corepack pnpm build
@@ -64,3 +68,4 @@ jobs:
           node scripts/check-migrate-profiles.mjs
           node scripts/check-migrate-settings.mjs
           node scripts/check-permission.mjs
+          node scripts/check-ci-scripts.mjs
