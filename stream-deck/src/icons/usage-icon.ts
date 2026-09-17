@@ -219,7 +219,7 @@ function renderScoped(windows: ScopedUsageWindow[], snapshot: UsageSnapshot, now
 export interface UsageIconOptions {
   kind: UsageKind;
   snapshot?: UsageSnapshot;
-  /** Wall-clock ms; injectable for the drill script. */
+  /** Wall-clock ms; injectable for the state probe. */
   now?: number;
 }
 
