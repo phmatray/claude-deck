@@ -5,7 +5,7 @@
 // Run: pnpm exec tsx scripts/check-usage-projection.mts
 process.env.TZ = "Europe/Paris"; // the expected clock strings below are local wall time
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { UsageKind } from "../src/icons/usage-icon.ts";
@@ -85,6 +85,12 @@ const live = await snapshotOf();
 assert.equal(live.fiveHour?.percent, 8);
 assert.equal(live.fiveHour?.projectedLimitMs, undefined, "a pace the reset beats projects nothing");
 
+// Same window read at 75%: start = 12:00 reset − 5h = 07:00, so 2h59m59.262s bought 75%
+// and the last quarter lands at 10:59:59.754 UTC — before the reset, so it is kept. This
+// is the 5-hour key's own wiring (window length included), not a hand-built window.
+const hot5h = (await snapshotOf((u) => (u.five_hour.utilization = 75))).fiveHour;
+assert.equal(hot5h?.projectedLimitMs, Date.parse("2026-09-17T10:59:59.754Z"), "the 5-hour window projects through readUsageSnapshot");
+
 // Week at 84%, started 2026-09-12T13:00Z, read 4d21h later → 100% around 2026-09-18 08:17 UTC.
 const week = live.sevenDay?.projectedLimitMs;
 assert.ok(week !== undefined, "the weekly window projects");
@@ -125,9 +131,9 @@ assert.deepEqual(footerOf("five_hour", live.fiveHour!), ["resets in 1h58m", "#9c
 // The live weekly window, projected — accent colour (orange at 84%), day name because
 // the weekly limit routinely lands days out.
 assert.deepEqual(footerOf("seven_day", live.sevenDay!), ["limite ~ven 10:15", "#f97316"]);
-// Same 5-hour window at a pace that does run out first: 3h in at 75% → 10:59:59 UTC,
+// The same parsed 5-hour window at a pace that does run out first: 10:59:59 UTC is
 // 12:59:59 in Paris, rounded up to the next 5 minutes. No day name on the 5h key.
-assert.deepEqual(footerOf("five_hour", { percent: 75, resetsAtMs: Date.parse(RESET_5H), projectedLimitMs: Date.parse("2026-09-17T10:59:59.754Z") }), ["limite ~13:00", "#f97316"]);
+assert.deepEqual(footerOf("five_hour", hot5h!), ["limite ~13:00", "#f97316"]);
 
 // Spent: the number is red and the footer says so outright.
 const reset7d = Date.parse(RESET_7D);
@@ -138,14 +144,27 @@ assert.deepEqual(footerOf("five_hour", { percent: 104, resetsAtMs: Date.parse(RE
 // reading describes a window that no longer exists, so the tile goes back to saying how old
 // it is (amber) rather than forecasting inside a dead window.
 assert.deepEqual(footerOf("seven_day", live.sevenDay!, reset7d + 5 * MIN), ["2d old", "#f59e0b"]);
+// … including a window that was full: the limit lifted when the window reset, and a
+// frozen snapshot must not keep claiming otherwise.
+assert.deepEqual(footerOf("seven_day", { percent: 100, resetsAtMs: reset7d, projectedLimitMs: FETCHED_AT }, reset7d + 5 * MIN), ["2d old", "#f59e0b"]);
+// A window the payload gives no reset for can't be shown to be over, so 100% still reads
+// as spent rather than merely old.
+assert.deepEqual(footerOf("five_hour", { percent: 100, projectedLimitMs: FETCHED_AT }), ["limite atteinte", "#ef4444"]);
+// The projection is frozen at fetch time: once `now` has gone past it, saying "limite
+// ~12:05" at 12:30 would be plainly wrong, so the still-exact countdown takes over.
+const overtaken = { percent: 90, resetsAtMs: Date.parse(RESET_5H), projectedLimitMs: FETCHED_AT + 5 * MIN };
+assert.deepEqual(footerOf("five_hour", overtaken, FETCHED_AT + 4 * MIN), ["limite ~12:05", "#ef4444"]);
+assert.deepEqual(footerOf("five_hour", overtaken, FETCHED_AT + 30 * MIN), ["resets in 1h30m", "#9ca3af"]);
 
 // ── clock formatting ─────────────────────────────────────────────────────────
 const FAR_RESET = Date.parse("2026-09-30T00:00:00Z");
+// Every projection here is deliberately ahead of NOW: one already gone by would (rightly)
+// be replaced by the countdown, and this block is about how a live projection is spelled.
 const at = (local: string, percent = 20): UsageWindow => ({ percent, resetsAtMs: FAR_RESET, projectedLimitMs: Date.parse(local) });
 
 assert.equal(footerOf("five_hour", at("2026-09-17T14:32:00+02:00"))[0], "limite ~14:30", "rounded down to 5 min");
 assert.equal(footerOf("five_hour", at("2026-09-17T14:33:00+02:00"))[0], "limite ~14:35", "rounded up to 5 min");
-assert.equal(footerOf("five_hour", at("2026-09-17T09:04:00+02:00"))[0], "limite ~09:05", "hours and minutes zero-padded");
+assert.equal(footerOf("five_hour", at("2026-09-18T09:04:00+02:00"))[0], "limite ~09:05", "hours and minutes zero-padded");
 assert.equal(footerOf("seven_day", at("2026-09-18T23:58:00+02:00"))[0], "limite ~sam 00:00", "rounding the instant rolls the day over too");
 assert.equal(footerOf("seven_day", at("2026-09-20T06:00:00+02:00"))[0], "limite ~dim 06:00", "French 3-letter day names");
 assert.equal(footerOf("seven_day", at("2026-09-21T06:00:00+02:00"))[0], "limite ~lun 06:00");
@@ -155,4 +174,5 @@ assert.equal(footerOf("seven_day", at("2026-09-21T06:00:00+02:00"))[0], "limite 
 assert.equal(tile("five_hour", at("2026-09-17T14:29:00+02:00")), tile("five_hour", at("2026-09-17T14:31:00+02:00")), "2 min of drift inside a bucket → the same tile");
 assert.notEqual(tile("five_hour", at("2026-09-17T14:32:00+02:00")), tile("five_hour", at("2026-09-17T14:33:00+02:00")), "…but crossing a bucket does repaint");
 
+rmSync(home, { recursive: true, force: true });
 console.log("check-usage-projection: OK");

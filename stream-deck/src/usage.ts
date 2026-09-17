@@ -60,7 +60,11 @@ const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
  *  extrapolating. `percent` is an integer, so early in a window one single
  *  point of it is a huge relative step: at 5 minutes into the 5-hour window,
  *  1% already "projects" to a limit 8 hours out, and 2% to 4 hours out. Ten
- *  minutes is where that noise stops swamping the answer. */
+ *  minutes is where that noise stops swamping the answer. It is measured from
+ *  the window start, which for the 5-hour window is derived from an
+ *  hour-rounded reset (see `parseSnapshot`), so a session whose first message
+ *  lands late in that hour clears the gate almost immediately and the noise
+ *  gets through — bounded, again, by the `limitAtMs < resetsAtMs` filter. */
 const MIN_ELAPSED_MS = 10 * 60 * 1000;
 
 export interface LimitProjectionInput {
@@ -187,8 +191,12 @@ function parseSnapshot(blob: unknown): UsageSnapshot | undefined {
   if (typeof fetchedAtMs !== "number" || !u) return undefined;
 
   // The weekly window states its own start; the 5-hour one doesn't, so it is
-  // derived from the reset (which the server rounds to the hour, making the
-  // derived start approximate by up to a minute — harmless at this resolution).
+  // derived from the reset — which looks rounded to the hour (map/usage.md §4,
+  // unverified), so the derived start can sit up to an hour before the session
+  // really began. ponytail: that biases the 5-hour projection optimistic by up
+  // to that hour; a truer T0 would need the first message's timestamp, which
+  // the payload doesn't carry. The `limitAtMs < resetsAtMs` filter drops the
+  // worst of it, and the reading is a forecast, not a promise.
   const weekStartedAtMs = parseResetsAt(asRecord(u.seven_day_breakdown)?.window_started_at);
   return {
     fetchedAtMs,

@@ -138,21 +138,27 @@ function placeholder(kind: UsageKind, line: string): string {
 
 /** The bottom line of a single-window tile: when the burn rate runs the window
  *  out, when there is an answer to that; otherwise the reset countdown, or the
- *  snapshot's age when there is no reset left to count down to. */
+ *  snapshot's age once the window it describes is over (or never had a reset to
+ *  count down to). */
 function singleFooter(kind: UsageKind, w: UsageWindow, snapshot: UsageSnapshot, now: number, accent: string): string {
+  const aged = footer(ageText(snapshot.fetchedAtMs, now), "#f59e0b");
+  // Once the reset has gone by, the reading describes a window that no longer
+  // exists: the limit it reports has lifted, any projection inside it is moot,
+  // and how old the snapshot is becomes the only honest thing left to say. A
+  // window the payload gives no reset for can't be shown to be over, so it
+  // keeps its reading — that is also what `projectLimit` does at >= 100%.
+  if (w.resetsAtMs !== undefined && w.resetsAtMs <= now) return aged;
   // `accent` is red at this point — accentFor(>=90) — and nothing else on the
   // key says the limit is spent rather than nearly spent.
   if (w.percent >= 100) return footer("limite atteinte", accent);
-  const counting = hasFutureReset(w.resetsAtMs, now);
-  // A projection only means something inside a window that is still running:
-  // past the reset, the reading describes a window that no longer exists and
-  // how old it is becomes the only honest thing left to say.
-  if (counting && w.projectedLimitMs !== undefined) {
+  // The projection is frozen at fetch time while `now` keeps moving, and the
+  // snapshot only refreshes every ~5½ min: once it has been overtaken the key
+  // would be forecasting a moment already gone by, where the countdown — an
+  // absolute timestamp — is still exact.
+  if (w.projectedLimitMs !== undefined && w.projectedLimitMs > now) {
     return footer(`limite ~${clockText(w.projectedLimitMs, kind === "seven_day")}`, accent);
   }
-  return counting
-    ? footer(untilText(w.resetsAtMs, now), MUTED)
-    : footer(ageText(snapshot.fetchedAtMs, now), "#f59e0b");
+  return w.resetsAtMs === undefined ? aged : footer(untilText(w.resetsAtMs, now), MUTED);
 }
 
 function renderSingle(kind: UsageKind, w: UsageWindow, snapshot: UsageSnapshot, now: number): string {
