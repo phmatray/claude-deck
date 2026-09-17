@@ -51,10 +51,14 @@ abstract class AskKey extends SingletonAction<AskSettings> {
     }
   }
 
+  /** Never rejects: its callers fire and forget, and an unhandled rejection
+   *  takes down the whole plugin, session dashboard included. */
   private async paint(key: KeyAction<AskSettings>, slot: number): Promise<void> {
-    await key.setImage(this.image(currentQuestion(), slot)).catch((err: unknown) => {
-      streamDeck.logger.warn(`ask: setImage failed: ${err instanceof Error ? err.message : String(err)}`);
-    });
+    try {
+      await key.setImage(this.image(currentQuestion(), slot));
+    } catch (err) {
+      streamDeck.logger.warn(`ask: paint failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 

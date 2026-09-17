@@ -95,9 +95,16 @@ async function main() {
     process.exit(1);
   }
 
-  const options = (spec.options || []).map((o) => (typeof o === "string" ? { label: o } : o));
+  const isText = (v) => typeof v === "string";
+  const options = Array.isArray(spec?.options) ? spec.options.map((o) => (isText(o) ? { label: o } : o)) : [];
   if (!options.length) {
     process.stderr.write("claude-ask: no options given\n");
+    process.exit(1);
+  }
+  // question.json is painted straight onto the keys; the plugin must never get anything but text.
+  const textOr = (v) => v == null || isText(v);
+  if (!options.every((o) => isText(o?.label) && textOr(o.description)) || !["header", "question", "context"].every((k) => textOr(spec[k]))) {
+    process.stderr.write("claude-ask: each option needs a text label; description, header, question and context must be text\n");
     process.exit(1);
   }
   if (options.length > MAX_OPTIONS) {

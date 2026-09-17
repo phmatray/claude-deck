@@ -74,7 +74,9 @@ interface BlockOptions {
 }
 
 function block(text: string, { boxW, boxH, centerY, color, maxLines = 3, sizes = LABEL_SIZES }: BlockOptions): string {
-  const { size, lines } = fit(text, boxW, boxH, maxLines, sizes);
+  // Every key's text comes through here from question.json, which is untrusted:
+  // a number or a missing label must render, not throw.
+  const { size, lines } = fit(String(text), boxW, boxH, maxLines, sizes);
   const lh = Math.round(size * 1.1);
   const top = centerY - ((lines.length - 1) * lh) / 2 + size * 0.35;
   // One <text> per line with an explicit left x: Stream Deck's SVG renderer does
