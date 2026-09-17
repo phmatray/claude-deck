@@ -136,7 +136,10 @@ Confirmed firing in current Claude Code:
 - `SessionEnd` — session ends
 - `UserPromptSubmit` — user submits a prompt
 - `PreToolUse` / `PostToolUse` / `PostToolUseFailure`
-- `Stop` / `SubagentStart` / `SubagentStop`
-- `Notification` — what we use
+- `Stop` / `StopFailure` / `SubagentStart` / `SubagentStop`
+- `Notification`
+- `PermissionRequest` — fires *before* the permission dialog, and its stdout can decide the call
 
-There is **no** `PermissionGranted` or `PermissionDenied` event — that's why we rely on the status-flip from `idle` → `busy` to clear the awaiting state instead of an explicit clear hook.
+All of the above except `PostToolUseFailure` and `PermissionRequest` feed the event log; `PermissionRequest` has its own handler (`claude-code/bin/claude-permission`).
+
+There is still **no** `PermissionGranted` or `PermissionDenied` event, so nothing announces the answer. The awaiting state is cleared by the next `PreToolUse`/`PostToolUse` of the turn — which is why those two are registered catch-all rather than per tool.
