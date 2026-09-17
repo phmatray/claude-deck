@@ -1,69 +1,167 @@
 # Claude Deck
 
-Claude Code on a Stream Deck XL, in two halves:
+Claude Code on a Stream Deck XL, in two halves that ship as one thing:
 
-- **Session dashboard**: one key per running `claude` session, colour = state. Press a key to bring that session's terminal to the front (the exact Warp pane, or VS Code). Plus plan usage keys (5 h, week, per model).
-- **Answer keys** (the rest): Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Toujours** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
+- **Session dashboard** — one key per running `claude` session, colour = state. Press a key to bring that session's terminal to the front (the exact Warp pane, or the VS Code window). Plus plan-usage keys (5 h, week, per model) and a launcher key that opens a project in Warp with `claude` already running.
+- **Answer keys** — Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Toujours** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
 
 ![A permission prompt on the deck](docs/deck-permission.png)
 
-Built from two MIT projects, history kept: [k-ibaraki/streamdeck-claude](https://github.com/k-ibaraki/streamdeck-claude) by Julien Cruau became the dashboard, and [hardkoded/streamdeck-claude-answer](https://github.com/hardkoded/streamdeck-claude-answer) by Dario Kondratiuk became the answer keys. Added on top: focus on the exact Warp pane, animation only for states that need you (page switches stay fast), the XL profile, the permission keys.
-
 | Path | What |
 |---|---|
-| `claude-code/` | Claude Code plugin `claude-deck`: the status hooks, `claude-ask`, the `PermissionRequest` hook, the ask-on-streamdeck skill |
-| `stream-deck/` | Stream Deck plugin **Claude Deck** (`com.phmatray.claudedeck`): dashboard, usage keys, answer keys and their profile. See [stream-deck/README.md](stream-deck/README.md) |
+| `claude-code/` | the Claude Code plugin `claude-deck`: status hooks, `claude-ask`, the `PermissionRequest` hook, the `ask-on-streamdeck` skill |
+| `stream-deck/` | the Stream Deck plugin **Claude Deck** (`com.phmatray.claudedeck`): dashboard, usage keys, launcher, answer keys and their bundled profile |
 | `.claude-plugin/marketplace.json` | the `phmatray` marketplace, pointing at `claude-code/` |
+| `scripts/` | packaging, the two migrations, `check-*` self-checks, `probe-*` live probes |
+| `docs/` | [architecture](docs/architecture.md), [development](docs/development.md), [Warp focus](docs/warp-focus.md) |
 
-## How it works
+## State gallery
 
-The dashboard reads `~/.claude/sessions/<id>.events.ndjson`, one line per hook call written by `claude-code/hooks/notification.sh`.
+| | State | Meaning |
+|---|---|---|
+| <img src="stream-deck/icons/working.svg" width="64" alt="working"> | `working` | Claude is generating / running tools |
+| <img src="stream-deck/icons/subagent.svg" width="64" alt="subagent"> | `subagent` | Claude has delegated to a subagent (parent waiting) |
+| <img src="stream-deck/icons/idle.svg" width="64" alt="idle"> | `idle` | Claude is waiting for your next prompt |
+| <img src="stream-deck/icons/awaiting_permission.svg" width="64" alt="awaiting_permission"> | `awaiting_permission` | A permission prompt is open — your turn |
+| <img src="stream-deck/icons/awaiting_plan.svg" width="64" alt="awaiting_plan"> | `awaiting_plan` | `ExitPlanMode` was called — plan approval pending |
+| <img src="stream-deck/icons/awaiting_question.svg" width="64" alt="awaiting_question"> | `awaiting_question` | Claude is asking you to choose |
+| <img src="stream-deck/icons/awaiting.svg" width="64" alt="awaiting"> | `awaiting` | Some other prompt is waiting |
+| <img src="stream-deck/icons/error.svg" width="64" alt="error"> | `error` | Last turn failed (rate limit / auth / server error) |
+| <img src="stream-deck/icons/finished.svg" width="64" alt="finished"> | `finished` | Session just ended (visible ~3 s, then drops) |
+| <img src="stream-deck/icons/empty.svg" width="64" alt="empty"> | `empty` | No session in this slot |
 
-The answer keys talk to Claude through one pair of files per question in `~/.claude-ask/`:
-
-1. Claude runs `claude-ask` with a JSON question. It writes `questions/<id>.json` (with its session id) and waits.
-2. The Stream Deck plugin sees the file, draws the keys, and switches your deck to its own profile. The session's dashboard key gets a small deck badge.
-3. You press a key. The plugin writes `answers/<id>.json` and moves on to the next pending question, or switches the deck back.
-4. `claude-ask` prints the answer, removes its two files and exits.
-
-No lock: several sessions can ask at once, and their questions queue on the deck (oldest first). The queue key (`+N`) steps through them, **Retour** puts one aside (it stays pending on its session key; press that key to bring it back), **Terminal** hands it back to the terminal and brings that session's window forward. A dead `claude-ask` or an expired question drops off by itself.
-
-No network, no daemon, no polling service. Files and a file watcher.
+Background agents get their own muted variants: `bg_working`, `bg_idle`, `bg_awaiting`, `bg_awaiting_permission`.
 
 ## Requirements
 
-- A Stream Deck XL (model `20GAT9901`), Stream Deck app 6.6 or newer, macOS 12+.
-- Claude Code, Node 20+, `jq`, pnpm (`corepack pnpm` works).
+- A Stream Deck XL (model `20GAT9901`), Stream Deck app 6.6 or newer, macOS 12 or newer.
+- Claude Code, Node 20+, `jq`, `perl`.
+- To build from source: [pnpm](https://pnpm.io) (`corepack pnpm` is enough).
 
 ## Install
 
 ### 1. The Stream Deck plugin
+
+Download `com.phmatray.claudedeck.streamDeckPlugin` from the [latest release](https://github.com/phmatray/claude-deck/releases/latest) and double-click it. Or build it yourself:
 
 ```bash
 scripts/package.sh
 open dist/com.phmatray.claudedeck.streamDeckPlugin
 ```
 
-**Install it this way even if you plan to hack on it.** The installer is the only thing that imports the bundled `Claude Deck` profile, and without that profile the plugin cannot switch your deck. Then place **Claude Session Slot** keys where you want them.
+**Install it this way even if you plan to hack on it.** The installer is the only thing that imports the bundled `Claude Deck` profile, and without that profile the plugin cannot switch your deck to the answer keys. Then place **Claude Session Slot** keys where you want them.
 
 ### 2. The Claude Code plugin
 
 ```bash
-claude plugin marketplace add /path/to/claude-deck
+claude plugin marketplace add phmatray/claude-deck
 claude plugin install claude-deck@phmatray
 ```
 
-That installs the status hooks, the permission hook and the `ask-on-streamdeck` skill. `claude-ask` ships in the plugin's `bin/` (`claude-code/bin/claude-ask` here); it is not put on your PATH. Claude Code only refreshes its installed copy when the version changes: bump `version` in `.claude-plugin/marketplace.json` and `claude-code/.claude-plugin/plugin.json`, then `claude plugin marketplace update phmatray && claude plugin update claude-deck@phmatray`.
+That installs the status hooks, the permission hook and the `ask-on-streamdeck` skill. `claude-ask` ships in the plugin's `bin/` (`claude-code/bin/claude-ask` here); it is not put on your `PATH`. Claude Code only refreshes its installed copy when the version changes: bump `version` in `.claude-plugin/marketplace.json` and `claude-code/.claude-plugin/plugin.json`, then `claude plugin marketplace update phmatray && claude plugin update claude-deck@phmatray`.
 
 ### 3. Tell Claude to use it
 
-Once per session, or put it in your `CLAUDE.md`:
+Only needed for questions Claude asks on its own initiative — permission prompts and plans need nothing. Once per session, or put it in your `CLAUDE.md`:
 
 > Ask me questions on the Stream Deck.
 
-## Usage
+## Upgrading from the two-plugin setup
 
-Claude does this for you, but the CLI is plain enough to use directly:
+Before 3.0 this was two Stream Deck plugins (`com.julien.claudesessions` for the dashboard, `com.claudeask.streamdeck` for the answer keys) and a set of hook commands copied into `~/.claude/settings.json`. 3.0 is one Stream Deck plugin and one Claude Code plugin. Two scripts move you over; both back up before they touch anything and both take `--dry-run`.
+
+1. **Quit the Stream Deck app.** It rewrites its own profile files, and would overwrite the migration. `migrate-profiles.mjs` refuses to run on the app's folder while it is up.
+
+2. **Re-point the keys you already placed**, so they keep their position and settings instead of turning into "missing plugin" tiles:
+
+   ```bash
+   node scripts/migrate-profiles.mjs --dry-run
+   node scripts/migrate-profiles.mjs --remove-old-ask-profile
+   ```
+
+   It copies the whole profiles folder to `ProfilesV3.bak-<yyyymmdd>-claude-deck-v3` (never overwriting an existing backup), then rewrites every action that belonged to `com.julien.claudesessions` — multi-action children included — to `com.phmatray.claudedeck`. Keys of the old answer plugin are left alone; `--remove-old-ask-profile` moves its imported "Claude Ask" profile into the backup, since the new plugin brings its own.
+
+3. **Remove the old plugins** from `~/Library/Application Support/com.elgato.StreamDeck/Plugins/`: `com.julien.claudesessions.sdPlugin` and `com.claudeask.streamdeck.sdPlugin` (in a dev setup the first is a symlink to an old checkout — delete the link, not the checkout). Then install the new `.streamDeckPlugin` as above.
+
+4. **Update the Claude Code plugin**, so the hooks come from it rather than from your settings:
+
+   ```bash
+   claude plugin marketplace update phmatray
+   claude plugin update claude-deck@phmatray
+   ```
+
+5. **Drop the old hook commands** from `~/.claude/settings.json` — left in place they log every event twice:
+
+   ```bash
+   node scripts/migrate-settings.mjs --dry-run
+   node scripts/migrate-settings.mjs
+   ```
+
+   It backs the file up to `settings.json.bak.<yyyymmdd>-claude-deck-v3` and removes every hook command matching `(streamdeck-claude|claude-deck).*notification.(sh|ps1)`, dropping the matcher groups and event keys that leaves empty. Run it **after** step 4: it refuses to remove a hook for an event the installed plugin does not yet register itself, because those hooks would be the dashboard's only event feed until it does. `--force` overrides that.
+
+The Setup key says whether it worked: an amber **HOOKS** badge means the plugin's hooks are not registered the way the dashboard needs. `sh scripts/probe-hooks.sh` prints the same verdict with the details.
+
+## How it works
+
+The dashboard reads `~/.claude/sessions/<id>.events.ndjson`, one line per hook call written by `claude-code/hooks/notification.sh`, and replays it through a small state machine. No daemon, no network.
+
+The answer keys talk to Claude through one pair of files per question in `~/.claude-ask/`:
+
+1. Claude (or the permission hook) runs `claude-ask` with a JSON question. It writes `questions/<id>.json` — with its session id — and waits.
+2. The Stream Deck plugin sees the file, draws the keys, and switches your deck to its own profile. The session's dashboard key gets a small deck badge.
+3. You press a key. The plugin writes `answers/<id>.json` and moves on to the next pending question, or switches the deck back.
+4. `claude-ask` prints the answer, removes its two files and exits.
+
+No lock: several sessions can ask at once, and their questions queue on the deck (oldest first). The queue key (`+N`) steps through them, **Retour** puts one aside (it stays pending on its session key; press that key to bring it back), **Terminal** hands it back to the terminal and brings that session's window forward. A dead `claude-ask` or an expired question drops off by itself.
+
+## Key reference
+
+### Dashboard keys
+
+**Claude Session Slot** — one per session you want to see. Sessions are ordered "needs you first, then most recently active", so the keys always show the ones that matter; give the plugin more slots than you run sessions (see [`docs/architecture.md`](docs/architecture.md#slot-ordering)). The key shows the repo on top, the branch below, and a top-left badge for the `bg` tag or Claude Code's two-character session suffix — the only thing telling apart two sessions in the same worktree.
+
+| Gesture | What happens |
+|---|---|
+| Short press | Brings that session's terminal to the front. If a question of its is waiting on the deck, it also comes up on the answer keys. |
+| Hold ≥ 0.5 s | Wipes that session's event log and re-derives its state — the cure for an `awaiting` that got stuck. |
+| Keep holding to 3 s | `SIGTERM` then `SIGKILL` for that session. A red ring fills while it arms; let go before it closes to cancel. Background agents share a daemon pid and are never killed. |
+
+**Claude Setup** — wipes every event log and re-renders. Also self-checks the hook install and shows an amber **HOOKS** badge when something is off.
+
+**Claude Usage: Session (5 h) / Week (all models) / Week (per model)** — the plan's rate-limit windows, read from the snapshot Claude Code caches in `~/.claude.json`: no credentials, no network call. Colour steps green → amber → orange → red. The footer says `limite atteinte` at 100 %, otherwise `limite ~HH:MM` (`limite ~jeu 14:30` on the weekly key) — a stateless projection of when the burn rate so far runs you out — and falls back to the countdown to the reset when there is nothing to project. Claude Code only refetches that snapshot when something asks to *see* usage, which a GUI-hosted session never does, so the plugin refreshes it itself by running `claude -p "/usage"` every 5½ minutes while a usage key is on the deck. Pressing any of them forces a refresh past that throttle; the key answers with a tick or an alert, since a refresh often legitimately cannot move the number.
+
+**Claude Launcher** — opens a project in Warp with `claude` already running. Set `directory` (absolute, or `~/…`), and optionally a `label`, a `command` (default `claude`) and `newWindow`, in the key's property inspector. The key writes `~/.warp/tab_configs/claude_deck_<slug>.toml` and presses open `warp://tab_config/<slug>`. An unconfigured key reads **Dossier ?**.
+
+### Answer keys
+
+The bundled `Claude Deck` profile, 8 × 4:
+
+|  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|---|
+| **row 0** | context | header | — | — | — | queue | back | Terminal |
+| **row 1** | detail 1 | detail 2 | detail 3 | detail 4 | detail 5 | detail 6 | detail 7 | detail 8 |
+| **row 2** | detail 9 | detail 10 | detail 11 | detail 12 | detail 13 | detail 14 | detail 15 | detail 16 |
+| **row 3** | option 1 | option 2 | option 3 | option 4 | option 5 | option 6 | option 7 | option 8 |
+
+The sixteen detail keys are one text surface: the text is wrapped at the width of a whole row (104 columns, 13 per key) and each key shows its own columns, so words run on from key to key. Two rows of six lines each; longer text ends in `…`. The header key's colour tells the kind: amber for a permission prompt, violet for a plan, blue for a question. The context key shows the project, and the session's name when the dashboard knows it. Unused option keys go dark.
+
+A plan waiting for approval:
+
+![A plan on the deck](docs/deck-plan.png)
+
+### Permission prompts
+
+The Claude Code plugin registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser** — plus **Toujours** when Claude Code suggested a rule to remember — with the tool on the header key, the call itself across the detail keys (a Bash command and its description, a file path with the first line of an edit, a URL, an MCP tool's input) and the project on the context key.
+
+The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the session event log, when the hooks are installed). Read the detail keys before pressing, not just the header — three words can't tell `git push` from `git push --force`. When the detail ends in `…`, the rest is in the terminal.
+
+**Toujours** stores Claude Code's own suggested rule — not the broader one the terminal offers — spelled out on the last detail line, `Toujours = Bash(python3 …) · localSettings`, so it is never a blind press. It only appears when the prompt carries such a suggestion.
+
+A plan is the exception. A hook cannot approve `ExitPlanMode`: a `{"behavior":"allow"}` decision leaves the dialog standing, while a deny does get through. So a plan shows **Continuer à planifier** — which denies with a message asking Claude what to change, and it revises — and **Approuver au terminal**, which answers nothing and just brings the terminal forward for you to hit Enter.
+
+## Asking from the CLI
+
+Claude does this for you through the `ask-on-streamdeck` skill, but the CLI is plain enough to use directly:
 
 ```bash
 cat <<'JSON' | claude-code/bin/claude-ask
@@ -104,26 +202,25 @@ There is no exit 4 any more: a second question queues instead of being refused.
 
 Anything other than 0 means *ask in the terminal instead* — never assume an answer.
 
-### Key layout
+### Writing labels that fit
 
-|  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-|---|---|---|---|---|---|---|---|---|
-| **row 0** | context | header | — | — | — | queue | back | Terminal |
-| **row 1** | detail 1 | detail 2 | detail 3 | detail 4 | detail 5 | detail 6 | detail 7 | detail 8 |
-| **row 2** | detail 9 | detail 10 | detail 11 | detail 12 | detail 13 | detail 14 | detail 15 | detail 16 |
-| **row 3** | option 1 | option 2 | option 3 | option 4 | option 5 | option 6 | option 7 | option 8 |
+A key is 72px. Labels are measured against real font metrics and auto-sized between 18px and 48px, wrapping onto up to three lines, but the honest ceiling is two or three short words.
 
-The sixteen detail keys are one text surface: the detail is wrapped at the width of a whole row (104 columns, 13 per key) and each key shows its own columns, so words run on from key to key. Two rows of six lines each; longer text ends in `…`. The header key's colour tells the kind: amber for a permission prompt, violet for a plan, blue for a question. The context key shows the project, and the session's name when the dashboard knows it. Unused option keys go dark.
+![A question with three options](docs/deck-ask.png)
 
-A plan waiting for approval:
+Put the reasoning in `description`. You read that on the detail keys (and in the terminal) while deciding; the key is just the button you press.
 
-![A plan on the deck](docs/deck-plan.png)
+Do not put what the choice hinges on in a label — three words cannot distinguish `git push` from `git push --force origin main`. It belongs in the question or its descriptions, where the detail keys show it; if it is longer than two rows of them, ask in the terminal.
 
-### Permission prompts
+## Limitations
 
-The plugin also registers a `PermissionRequest` hook (`claude-code/hooks/hooks.json` → `claude-code/bin/claude-permission`). When Claude Code asks to use a tool, the deck shows **Autoriser** / **Refuser** — plus **Toujours** when Claude Code suggested a rule to remember — with the command's first words on the header key, the call itself across the detail keys (a Bash command and its description, a file path with the first line of an edit, a URL, an MCP tool's input) and the project on the context key. The terminal dialog stays up meanwhile: whichever you answer first wins, and answering in the terminal withdraws the deck question (detected through the dashboard's session event log, when its hooks are installed). Read the detail keys before pressing, not just the header — three words can't tell `git push` from `git push --force`. When the detail ends in `…`, the rest is in the terminal.
-
-The **Toujours** key stores Claude Code's own suggested rule (not the broader one the terminal offers), spelled out on the last detail line — `Toujours = Bash(python3 …) · localSettings` — and it only appears when the prompt carries such a suggestion. A plan is the exception: a hook can't approve one, so an `ExitPlanMode` prompt shows **Continuer à planifier** / **Approuver au terminal** instead. Nothing shows with `--dangerously-skip-permissions`, which never asks. A prompt that arrives while another question is on the keys queues behind it.
+- **Stream Deck XL only.** The bundled profile is built for the 8 × 4 XL (`DEVICE_MODEL` in `stream-deck/scripts/build-profile.mjs`, `DeviceType` in the manifest). Other sizes would need their own profile and their own detail layout.
+- **macOS only**, by design and not just by testing: focusing a terminal goes through `open` and `osascript`, the paths are `~/Library/…`, and the usage refresher works around launchd's `PATH`.
+- **A plan cannot be approved from the deck.** A `PermissionRequest` hook's `allow` does not dismiss the `ExitPlanMode` dialog (a deny does), so the plan keys are "keep planning" and "approve in the terminal".
+- **Claude's own `AskUserQuestion` never reaches the deck.** The permission hook skips it deliberately — the dialog it opens cannot be answered from a hook. Questions get on the keys when Claude calls `claude-ask`, which is what the `ask-on-streamdeck` skill is for.
+- **Nothing shows with `--dangerously-skip-permissions`.** That mode never asks, so there is no prompt to put on the keys.
+- **Eight options max.** That is how many option keys the page has.
+- **One question on the keys at a time.** Others queue behind it; the queue key shows how many.
 
 ### Stuck deck
 
@@ -143,84 +240,27 @@ sh scripts/probe-deck-link.sh
 
 Forces one page switch and reads the Stream Deck log. RED means the deck's control channel is desynced (every command times out after 5 s, often after the Mac wakes up): unplug the deck for 15 s and plug it back in.
 
-## Writing good labels
-
-A key is 72px. Labels are measured against real font metrics and auto-sized between 18px and 48px, wrapping onto up to three lines, but the honest ceiling is two or three short words.
-
-![A question with three options](docs/deck-ask.png)
-
-Put the reasoning in `description`. You read that on the detail keys (and in the terminal) while deciding; the key is just the button you press.
-
-Do not put what the choice hinges on in a label — three words cannot distinguish `git push` from `git push --force origin main`. It belongs in the question or its descriptions, where the detail keys show it; if it is longer than two rows of them, ask in the terminal.
-
-## Configuring the Elgato MCP server in Stream Deck
-
-Separate from this plugin, Stream Deck can expose itself to an AI assistant over MCP. It is worth setting up, and it is worth knowing what it does *not* do.
-
-**Enable MCP in the Stream Deck app.** In Stream Deck 7.5's settings, turn on the MCP/AI feature. It adds a virtual **MCP Deck** device (8x4) alongside your hardware. You can confirm it stuck:
-
-```bash
-defaults read com.elgato.StreamDeck MCP_enabled   # 1 when enabled
-```
-
-**Add the server to Claude Code.** Elgato ships it on npm as [`@elgato/mcp-server`](https://www.npmjs.com/package/@elgato/mcp-server):
-
-```bash
-claude mcp add elgato --scope user -- npx --yes @elgato/mcp-server@latest
-```
-
-Or by hand in `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "elgato": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["--yes", "@elgato/mcp-server@latest"],
-      "env": {}
-    }
-  }
-}
-```
-
-Restart Claude Code and ask it to check `bridge_status`. It should report `Connected Elgato apps: streamdeck`. If the tools are missing, the Stream Deck app is not running or MCP is off.
-
-**What you get.** Five tools: `bridge_status`, `streamdeck__list_actions`, `streamdeck__get_context`, `streamdeck__get_executable_actions`, `streamdeck__invoke_plugin_method`.
-
-**Why this project does not use it.** The MCP server can enumerate the actions your installed plugins provide and call methods on plugins that opt in by publishing an AI schema. It cannot create a page, place a key, draw a key, or tell you that a key was pressed. `get_executable_actions` returns an empty list unless an installed plugin is explicitly AI-ready. So MCP is a fine way to let Claude *inspect* your Stream Deck setup, and no way to build an input device out of it — which is why the question flow here is a real Stream Deck plugin rather than a few MCP calls.
-
 ## Development
 
 ```bash
-scripts/package.sh        # build dist/com.phmatray.claudedeck.streamDeckPlugin
-stream-deck/scripts/link-plugin.sh   # after one real install: run the repo build directly
-node scripts/check-permission.mjs   # permission hook self-check, no deck needed
+scripts/package.sh                    # build dist/com.phmatray.claudedeck.streamDeckPlugin
+stream-deck/scripts/link-plugin.sh    # after one real install: run the repo build directly
+node scripts/check-permission.mjs     # one of the self-checks; no deck needed
 ```
 
 With the link in place, `corepack pnpm build && corepack pnpm sd:reload` in `stream-deck/` restarts the plugin on the new code. Changes to the **key layout** mean rebuilding the profile and reinstalling the `.streamDeckPlugin`, because only the installer imports profiles.
 
-```
-.claude-plugin/         marketplace manifest
-claude-code/            Claude Code plugin: hooks, bin/claude-ask, bin/claude-permission, skills/
-stream-deck/            the Stream Deck plugin (own README and scripts)
-scripts/                packaging, migrations, check-* self-checks, probe-* live probes
-docs/                   dashboard reference notes + rendered key art for this README
-```
+Every `check-*` script is hermetic (temp `HOME`, temp `CLAUDE_ASK_DIR`) and runs in CI; every `probe-*` script needs the real deck or the real `~/.claude` and is for a human at the hardware. [`docs/development.md`](docs/development.md) has the full list, the verification checklist, the Stream Deck SDK notes and how a release is cut.
 
-`stream-deck/scripts/build-profile.mjs` generates the bundled profile. Its comments document the four things that make Stream Deck's profile importer fail silently — worth reading before you touch it, since it accepts a broken profile without an error and hands you a page with no keys.
+## Credits
 
-### About the images
+Two MIT projects, merged here with their history intact:
 
-The images in this README are rendered from the plugin's own SVG key art with `@resvg/resvg-js` (`corepack pnpm docs:render` in `stream-deck/`), not photographed off the hardware. They are accurate about layout, sizing, and colour. Be aware that Stream Deck's renderer is stricter than resvg: it honours neither per-`tspan` positioning nor `text-anchor`, which is why the renderer emits one `<text>` element per line with an explicit `x`.
+- [streamdeck-claude](https://github.com/k-ibaraki/streamdeck-claude) — the session dashboard. Started by **Julien Cruau**, with later work by **Keita Ibaraki**.
+- [streamdeck-claude-answer](https://github.com/hardkoded/streamdeck-claude-answer) — the answer keys, by **Darío Kondratiuk**.
 
-## Limitations
-
-- **Stream Deck XL only.** The bundled profile targets model `20GAT9901` (`DEVICE_MODEL` in `stream-deck/scripts/build-profile.mjs`, `DeviceType` in the manifest). Other sizes need their own profile.
-- **Eight options max.** That is how many option keys the page has.
-- **One question on the keys at a time.** Others queue behind it; the queue key shows how many.
-- **macOS only**, because that is all this has been tested on. Nothing in it is deeply mac-specific except the paths.
+Added on top: the exact-Warp-pane focus, animation only for the states that need you (so page switches stay fast), the XL profile and its 16-key detail strip, the permission and plan keys, the per-session question queue, the burn-rate projection on the usage keys, and the launcher.
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE), which keeps all three copyright lines.

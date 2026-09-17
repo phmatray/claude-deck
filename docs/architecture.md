@@ -19,17 +19,23 @@ The group split is not cosmetic. A session's event log stops growing the instant
 
 A session promoted into `recentlyFinished` gets its `lastActivityAt` re-stamped to the moment of death. Without that the 3s green check would sink: `SessionEnd`'s hook unlinks the event log, so a cleanly-exited session falls back to `startedAt` — hours old, and off the bottom of a short deck.
 
-Ties break on `startedAt` descending, then `pid` ascending.
+Ties break on `startedAt` descending, then `pid` ascending. The explicit tiebreak is load-bearing: sessions restored in one batch share a `SessionStart` ts to the millisecond, and relying on sort stability there would hand the order to `readSessionFiles`' `Promise.all` push order, which varies per tick and would repaint every key for nothing.
 
-### The view window
+The keys then show the **head** of that list — `sortedEntries.slice(0, actionCount)`, each entry stamped with its 1-based `slotNumber` for the corner badge. There is no paging: on an XL the slots outnumber the sessions, and attention-first ordering already puts what needs you on the first key. `tick`'s log line carries `shown=<visible>/<total>` and `maybeLog` dedups on the whole string, so the log records exactly the ticks where that changed.
 
-There are usually more sessions than keys, so the keys render a *window* onto the sorted list rather than its head. `createStateTracker` owns `viewOffset`; a short press calls `advanceView()`, which pages down by the visible slot count and wraps at the end. Each entry in the sliced window carries its absolute `slotNumber`, which is what the corner badge draws — the badge is the only feedback that a press landed, which is also why the short press does *not* call `showOk()` (the green overlay would cover the icon it is confirming).
+Because slot identity changes between two ticks as the ordering shifts, a key press pins the caption it was showing at `KeyDown` (`SlotState.pressedLabel` / `pressedBadge` / `pressedFocus` / `pressedSessionId`); the kill target's pid was already captured in `onKeyDown`'s locals.
 
-The window resets to 0 when a session **newly** enters an `ATTENTION_STATES` state. Edge-triggered, not level-triggered: a session that simply keeps waiting must not re-snap the view every tick, because being able to page past it is exactly what you want while it waits. It also resets when `viewOffset` would fall past the end of a shrinking list. Nothing else moves it — page away from the top and the deck stays there until something needs you.
+### Press gestures (`src/slot-action.ts`)
 
-`tick`'s log line carries `view=<offset>/<total>`, and `maybeLog` dedups on the whole string, so the log records exactly the ticks where the window moved. The explicit tiebreak is load-bearing: sessions restored in one batch share a `SessionStart` ts to the millisecond, and relying on sort stability there would hand the order to `readSessionFiles`' `Promise.all` push order, which varies per tick and would repaint every key for nothing.
+One key, three lengths, two timers armed at `KeyDown` and cancelled by whichever `KeyUp` comes first:
 
-Because slot identity can now change between two ticks, a key press pins the caption it was showing at `KeyDown` (`SlotState.pressedLabel` / `pressedBadge`); the kill target's pid was already captured in `onKeyDown`'s locals.
+| Held | Effect |
+|---|---|
+| < `LONG_PRESS_MS` (500 ms) | Short press: `focusSession` on the pinned target, plus `showQuestion` when that session has one waiting on the deck. |
+| ≥ 500 ms | Wipes the session's event log and re-derives its state. Arms the kill ring — but only for a killable session. |
+| ≥ `KILL_PRESS_MS` (3 s) | `killSession`: `SIGTERM`, then `SIGKILL` 2 s later if the pid is still there. |
+
+`killArmingSince` drives the red progress ring in `render-loop.ts` and is what suppresses the green `showOk()` of the wipe: the ring is the confirmation, and a green flash on top of it would read as "done". Background agents are not killable — their pid is a shared daemon — so the second timer is never armed for them.
 
 ## State derivation
 
@@ -55,7 +61,9 @@ The `notification_type` discrimination requires hooks to capture CC's `notificat
 
 `PreToolUse` and `PostToolUse` are registered with **empty matcher** (catch-all), so the NDJSON gets one line per tool call. The reducer dispatches by `tool_name` — only `ExitPlanMode`, `AskUserQuestion`, and `TodoWrite` produce state transitions; other tools are no-ops. The trade-off is bigger logs (~1 line per Bash/Edit/Read), but `SessionStart` truncates so it stays bounded per CC run.
 
-The catch-all matcher is load-bearing: `awaitingPermission` is cleared by *any* `PreToolUse`/`PostToolUse` mid-turn (`session-events.ts`), so a permission padlock only clears once a normal tool runs after approval. If a stale `settings.json` registers these tool-specific (the pre-`9dc606c` `ExitPlanMode`/`TodoWrite` matchers) instead, `PostToolUse[Bash]` never fires and the padlock stays stuck until the turn ends. `src/hook-check.ts` guards against exactly this: it verifies the catch-all registration at startup (and on Setup-key appear) and surfaces a warning rather than letting the plugin degrade silently.
+The catch-all matcher is load-bearing: `awaitingPermission` is cleared by *any* `PreToolUse`/`PostToolUse` mid-turn (`session-events.ts`), so a permission padlock only clears once a normal tool runs after approval. Registered tool-specific instead, `PostToolUse[Bash]` never fires and the padlock stays stuck until the turn ends.
+
+`src/hook-check.ts` guards against exactly that, at startup and whenever the Setup key appears. It judges the **installed** plugin, not the repo and not `settings.json`, since Claude Code runs a versioned copy: `~/.claude/settings.json` must have an `enabledPlugins` key matching `/^claude-deck@/` set to `true`, `~/.claude/plugins/installed_plugins.json` must carry that key, that install's `hooks/hooks.json` must register all ten events catch-all on a command ending in `/hooks/notification.sh` plus `PermissionRequest` on `/bin/claude-permission`, and the cached `notification.sh` must exist. Failures become an amber `HOOKS` badge on the Setup key; hooks left in `settings.json` by the pre-3.0 installer are only a *warning* (every event logs twice — `scripts/migrate-settings.mjs` removes them). Every path derives from a `home` parameter, which is how `scripts/check-hook-check.mts` runs it against fake `HOME`s; `scripts/probe-hooks.sh` applies the same rules to the real one.
 
 To add a new state: register the event in `claude-code/hooks/hooks.json`, add a case in `src/session-events.ts`, and an entry in the `STATES` registry at `src/icons/states.ts`. State priority (see `deriveState()` in `src/sessions.ts`): `finished` > `error` > a question pending on the deck (`src/ask/queue.ts`, joined by session id each tick: `permission` → `awaiting_permission`, `plan` → `awaiting_plan`, `ask` → `awaiting_question`; the key also gets a deck badge) > `awaiting_plan` > `awaiting_permission` > `awaiting_question` > `awaiting` > `subagent` > `working` > `idle`. All `awaiting*` flags win over `busy` because CC keeps the session marked busy while waiting on the user.
 
@@ -95,11 +103,30 @@ re-parsing the ~250KB blob is rare), `usage-refresh.ts` keeps that cache from
 going stale by spawning `claude -p "/usage"` off the slow tick, detached and
 throttled on the snapshot's own age (Claude Code only refetches when something
 asks to see usage, which an SDK-hosted session never does) or forced past that
-throttle by a key press, `icons/usage-icon.ts` draws a static tile per window, and
+throttle by a key press, `icons/usage-icon.ts` draws a static tile per window —
+its footer showing `projectLimit()`'s stateless burn-rate estimate of when the
+window runs out, rather than only the countdown to the reset — and
 `usage-action.ts` dedups by SVG exactly as `renderAll()` does.
 No motif, no animation — the brief was a quiet stepped colour scale. See the
 "Plan usage keys" section of `CLAUDE.md` for the payload's sharp edges (ISO vs
 epoch resets, `utilization` vs `percent`, model- vs surface-scoped entries).
+
+## Answer keys and the question queue (`src/ask/`)
+
+One pair of files per question in `$CLAUDE_ASK_DIR` (default `~/.claude-ask`), no lock: `claude-ask` writes `questions/<id>.json` (tmp file + rename) and polls for `answers/<id>.json`.
+
+- `queue.ts` watches `questions/` with `fs.watch` **plus** a 500 ms poll, because `fs.watch` drops events. It parses each file, drops malformed ones (logged once), drops questions whose `pid` is gone (`process.kill(pid, 0)` → `ESRCH`) or whose `expiresAt` passed more than 5 s ago, and orders what is left by `createdAt`.
+- `controller.ts` is the state machine: which question is active, which ids the user set aside (`dismissed`), whether the answer profile is showing and on which device. A new question activates and switches the deck to "Claude Deck"; an answered, withdrawn or expired one activates the next pending question, or switches the deck back when there is none. It imports nothing from the SDK — `switchTo` and `focus` are injected — which is what lets `scripts/check-ask-controller.mts` drive it under tsx.
+- `ask.ts` binds that machine to the SDK; `actions.ts` holds the seven key classes; `render.ts` draws them (ported from the upstream answer plugin, Helvetica-Bold advance table and all).
+- `detail.ts` is pure layout: the text is wrapped once at `KEYS_PER_ROW × COLS_PER_KEY` columns, then each key takes its own columns of each line, spaces turned into U+00A0 so the columns line up across the gaps between keys. Its size constants sit together at the top of the file — they are tuned by looking at the hardware.
+
+The dashboard joins the two: `tick()` asks `pendingQuestion(sessionId)` for every session, and `deriveState` turns a pending `permission` / `plan` / `ask` into `awaiting_permission` / `awaiting_plan` / `awaiting_question` (never over `error`), which also sorts the session into the attention group and adds the deck badge to its key.
+
+`claude-code/bin/claude-permission` is the other producer: it turns a `PermissionRequest` payload into the same question file (options built from Claude Code's own `permission_suggestions`), maps the answer back **by `optionId`**, and watches the session event log to withdraw the question when the terminal answers first.
+
+## Launcher key (`src/launcher/`)
+
+`tab-config.ts` is pure or `home`-parameterised: it expands `~`, refuses anything still relative, derives `claude_deck_<basename>_<6 hex of the path>` and renders the TOML. The action writes `~/.warp/tab_configs/<stem>.toml` on `willAppear` and on every settings change, but only when the content actually differs, and a press re-checks the file before `open warp://tab_config/<stem>` (`?new_window=true` when asked). A key with no usable directory paints "Dossier ?" and alerts on press rather than guessing a path.
 
 ## Reload trigger
 
@@ -116,36 +143,59 @@ PID liveness handles the case where a CC process dies hard (no `SessionEnd`): th
 ## Project layout
 
 ```
+.claude-plugin/marketplace.json     the "phmatray" marketplace → claude-code/
+claude-code/                        the Claude Code plugin (small: Claude Code copies it into its cache)
+├── .claude-plugin/plugin.json
+├── hooks/hooks.json                10 status events + PermissionRequest
+├── hooks/notification.sh           one NDJSON line per hook fire
+├── bin/claude-ask                  the question CLI
+├── bin/claude-permission           the PermissionRequest hook
+└── skills/ask-on-streamdeck/       teaches Claude when to use claude-ask
+scripts/                            repo-level
+├── package.sh                      build + pack the .streamDeckPlugin
+├── migrate-settings.mjs            drop the pre-3.0 hooks from ~/.claude/settings.json
+├── migrate-profiles.mjs            re-point old dashboard keys at the merged plugin
+├── check-*.mjs                     hermetic self-checks (CI runs these)
+└── probe-*.sh                      live probes, real deck / real ~/.claude (never CI)
 stream-deck/
-├── com.phmatray.claudedeck.sdPlugin/     # canonical Elgato plugin folder
-│   ├── manifest.json
-│   ├── bin/plugin.js                     # built bundle
-│   ├── imgs/                             # static manifest icons
-│   └── ui/                               # property inspector HTML
+├── com.phmatray.claudedeck.sdPlugin/   the Elgato plugin folder
+│   ├── manifest.json                   13 actions, the bundled profile, mac-only
+│   ├── bin/plugin.js                   built bundle (gitignored)
+│   ├── Claude Deck.streamDeckProfile   generated by pnpm build (gitignored)
+│   ├── imgs/                           static manifest icons
+│   └── ui/                             property inspectors (slot, setup, launcher)
 ├── src/
-│   ├── plugin.ts                         # entry, polling loop
-│   ├── slot-action.ts                    # per-slot SingletonAction
-│   ├── setup-action.ts                   # maintenance key (wipe logs + refresh)
-│   ├── sessions.ts                       # reads ~/.claude/sessions/
-│   ├── live-pids.ts                      # process.kill(pid, 0) liveness
-│   ├── session-events.ts                 # pure state machine
-│   ├── state-tracker.ts                  # cross-tick bookkeeping
-│   ├── render-loop.ts                    # zip slots → setImage
-│   ├── usage.ts                          # reads ~/.claude.json usage snapshot
-│   ├── usage-action.ts                   # the three plan-usage keys
-│   ├── usage-refresh.ts                  # spawns `claude -p "/usage"` to refresh it
-│   ├── env.ts                            # every per-user path + the CLI's PATH (single source)
-│   ├── reload-watcher.ts                 # mtime-driven self-restart
-│   ├── warp-focus.ts                     # warp://session, VS Code, cwd fallback
-│   ├── warp-focus-mac.ts                 # osascript activate + Cmd+digit / cycle
-│   ├── warp-db.ts                        # read-only sqlite3 → (window, tab_index)
-│   └── icons/                            # render pipeline (theme/motifs/states/text/render/usage-icon)
-├── icons/                                # standalone reference SVGs (one per state)
+│   ├── plugin.ts                       entry: registers actions, owns both ticks
+│   ├── slot-action.ts                  per-slot action + the three press gestures
+│   ├── setup-action.ts                 maintenance key (wipe logs, hook badge)
+│   ├── usage-action.ts                 the three plan-usage keys
+│   ├── sessions.ts                     reads ~/.claude/sessions/
+│   ├── live-pids.ts                    process.kill(pid, 0) liveness
+│   ├── session-events.ts               pure state machine over the event log
+│   ├── state-tracker.ts                cross-tick bookkeeping + ordering
+│   ├── render-loop.ts                  zip slots → setImage (deduped)
+│   ├── git-info.ts                     repo + branch from git's plumbing
+│   ├── hook-check.ts                   is the Claude Code plugin registering the hooks?
+│   ├── kill-session.ts                 SIGTERM → SIGKILL
+│   ├── usage.ts                        ~/.claude.json snapshot + burn-rate projection
+│   ├── usage-refresh.ts                spawns `claude -p "/usage"` to keep it fresh
+│   ├── env.ts                          every per-user path + the CLI's PATH
+│   ├── reload-watcher.ts               mtime-driven self-restart
+│   ├── spawn-capture.ts                spawn with a timeout and captured output
+│   ├── warp-focus.ts                   warp://session, VS Code, cwd fallback
+│   ├── warp-focus-mac.ts               osascript keystrokes
+│   ├── warp-db.ts                      read-only sqlite3 → (window, tab_index)
+│   ├── ask/                            queue, controller, key actions, detail strip, art
+│   ├── launcher/                       Warp tab config, key art, the action
+│   └── icons/                          theme, motifs, states, text, render, usage-icon
+├── icons/                              reference SVGs, one per state (pnpm icons:render)
+├── assets/svg/                         sources for the manifest PNGs (pnpm icons:static)
 └── scripts/
-    ├── build-profile.mjs                 # the bundled Claude Deck profile (run by pnpm build)
-    ├── link-plugin.sh                    # symlink into the Stream Deck Plugins folder
-    ├── unlink-plugin.sh                  # remove the symlink
-    ├── reload-plugin.sh                  # touch the reload trigger
-    ├── render-icons.mjs                  # regenerate icons/*.svg from src/icons/
-    └── render-static-pngs.mjs            # rasterize manifest PNGs from assets/svg/
+    ├── build-profile.mjs               the bundled profile (run by pnpm build)
+    ├── link-plugin.sh / unlink-plugin.sh / reload-plugin.sh
+    ├── render-icons.mjs / render-static-pngs.mjs / render-deck-docs.mts
+    ├── drill-states.ts                 paint every state on a real deck
+    └── check-*.mts|mjs                 hermetic self-checks (CI runs these)
+docs/                                   this file, development.md, warp-focus.md, deck-*.png
+.github/workflows/                      ci.yml (every check) and release.yml (tags v*)
 ```

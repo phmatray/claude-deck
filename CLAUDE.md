@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Stream Deck plugin that mirrors live Claude Code CLI session state on up to N keys. Code paths below (`src/`, `scripts/`, `icons/`, the `.sdPlugin` folder) are relative to `stream-deck/`, the Stream Deck plugin; `claude-code/` (the Claude Code plugin: hooks, `claude-ask`, `claude-permission`, skill), `docs/` and `.claude/` sit at the repo root. The runtime is a single Node process (`com.phmatray.claudedeck.sdPlugin/bin/plugin.js`) launched by the host Stream Deck app. **macOS only**: the plugin folder is symlinked into `~/Library/Application Support/com.elgato.StreamDeck/Plugins/`. README.md covers setup and the user-visible behaviour — read it before changing anything in `scripts/` or `claude-code/hooks/`.
+Claude Code on a Stream Deck XL, shipped as two plugins that talk through files: a **Stream Deck plugin** (live session dashboard, plan-usage keys, a Warp launcher key, and answer keys for Claude's questions and permission prompts) and a **Claude Code plugin** (the hooks that feed the dashboard, `claude-ask`, the `PermissionRequest` hook, and the `ask-on-streamdeck` skill).
+
+Code paths below (`src/`, `scripts/`, `icons/`, the `.sdPlugin` folder) are relative to `stream-deck/`; `claude-code/`, repo-level `scripts/`, `docs/`, `.claude/` and `.github/` sit at the repo root. The runtime is a single Node process (`com.phmatray.claudedeck.sdPlugin/bin/plugin.js`) launched by the host Stream Deck app. **macOS only**, by design: `open`, `osascript`, `~/Library/…` paths, launchd's `PATH`. README.md covers setup and the user-visible behaviour — read it before changing anything in `scripts/` or `claude-code/hooks/`.
 
 ## Common commands
 
-Use **pnpm** (not npm/npx) — see global memory.
+Use `corepack pnpm`, never npm/npx. Run these from `stream-deck/`.
 
 ```bash
 pnpm build              # rollup → com.phmatray.claudedeck.sdPlugin/bin/plugin.js (terser in prod, sourcemaps in watch)
@@ -16,13 +18,15 @@ pnpm watch              # rollup -w + auto-touches the reload trigger after each
 pnpm sd:reload          # touch ~/.claude/.claude-deck.reload → plugin self-exits → SD app respawns it (~1s)
 pnpm sd:validate        # @elgato/cli validate manifest + assets
 pnpm sd:link / sd:unlink           # (re)create the symlink into Plugins/
-bash ../scripts/probe-hooks.sh     # is the installed claude-deck Claude Code plugin registering every hook? (reads the real ~/.claude)
+bash ../scripts/probe-hooks.sh     # probe, NOT for agents: reads the real ~/.claude to check the installed plugin's hooks
 pnpm icons:render       # regenerate icons/*.svg reference assets from src/icons/
 pnpm icons:static       # rasterize manifest PNGs from assets/svg/ via @resvg/resvg-js
 pnpm docs:render        # regenerate ../docs/deck-{permission,plan,ask}.png from the answer-key art
 ```
 
-There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, the assert-based `scripts/check-*.mts` (`pnpm exec tsx scripts/check-<name>.mts`), then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
+There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, then every self-check, then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
+
+`check-*` scripts are hermetic (temp `HOME`, temp `CLAUDE_ASK_DIR`) and are what CI runs: `.mts` under tsx from `stream-deck/` (`pnpm exec tsx scripts/check-<name>.mts`), `.mjs` under plain node (`stream-deck/scripts/check-profile.mjs`, and the five at the repo root: `node scripts/check-<name>.mjs`). `probe-*` scripts need the real deck or the real `~/.claude` and are for a human at the hardware — never run them from an agent session, and never put one in CI. Non-trivial new logic leaves one new `check-*` behind, listed by name in `.github/workflows/ci.yml`.
 
 First time after building, you still need to quit + relaunch the SD app once so the new bundle picks up the reload-watcher.
 
@@ -40,16 +44,18 @@ Every per-user path is derived from `os.homedir()` in `env.ts` (sessions dir, se
 
 Two intervals share the same `state-tracker.ts` instance:
 
-- **Slow tick (1s):** `tracker.tick()` re-reads sessions + liveness + notify/plan files, computes the sorted `DisplayEntry[]`, and `renderAll()`s every slot. Re-entrancy guarded by `slowTickRunning`.
+- **Slow tick (1s):** `tracker.tick()` re-reads sessions + liveness + event logs, computes the sorted `DisplayEntry[]`, and `renderAll()`s every slot (the head of the sorted list — there is no paging). It then calls `renderUsage()`, a no-op when no usage key is on the deck. Re-entrancy guarded by `slowTickRunning`.
 - **Animation tick (120ms):** advances `frame`, then renders only if `tracker.needsAnimation()` is true (an animated motif, or a pulsing in-progress todo — text never moves). Same guard pattern.
 
 `createStateTracker()` owns the cross-tick bookkeeping: `prevLiveIds` (so a session is promoted to `finished` only when it was alive *last tick* — stale junk files from previous CC runs never appear) and `recentlyFinished` (carry-over for `FINISHED_TTL_MS = 3000`ms after death).
 
-State priority for an idle session: `awaiting_plan` > `awaiting` > plain `idle`. See `deriveState()` in `sessions.ts`. A question waiting on the deck for the session (`src/ask/queue.ts`, joined by `sessionId` in `tick()`) outranks all of those except `error`, and adds a deck badge to the key.
+State priority (`deriveState()` in `sessions.ts`): `finished` > `error` > a question waiting on the deck for that session (`src/ask/queue.ts`, joined by `sessionId` in `tick()`, which also adds the deck badge to the key) > `awaiting_plan` > `awaiting_permission` > `awaiting_question` > `awaiting` > `subagent` > `working` > `idle`.
 
 ### Answer keys (`src/ask/`)
 
 `claude-ask` writes one `questions/<id>.json` per question (tmp + rename) and polls `answers/<id>.json`; there is no lock. `queue.ts` watches `questions/` (fs.watch plus a 500 ms poll), drops malformed files, dead `pid`s and expired questions, and orders by `createdAt`. `controller.ts` is the SDK-free state machine (active question, dismissed set, which deck shows the "Claude Deck" profile); `ask.ts` binds it to the SDK; `actions.ts` holds the keys, drawn by `render.ts`. `detail.ts` lays out the 16-key detail strip: the text is wrapped once at the row width, then each key takes its own 13 columns (no-break spaces keep them aligned); its size constants are first guesses awaiting a look at the hardware. A short press on a session key with a pending question brings that question up on the key's deck as well as focusing the terminal.
+
+`claude-code/bin/claude-permission` is the second producer of question files. It turns a `PermissionRequest` payload into `Autoriser` / `Toujours`? / `Refuser` (the `Toujours` rule is Claude Code's own first `addRules`+`allow` suggestion, echoed back verbatim and spelled out on the last detail line), maps the pressed key back **by `optionId`, never by index**, and withdraws the question — SIGTERM to its `claude-ask` child — when the session event log shows the terminal answered first. Two things it cannot do, both verified live: a hook's `allow` does **not** approve `ExitPlanMode` (a deny does, which is why a plan gets "Continuer à planifier" / "Approuver au terminal"), and `AskUserQuestion` is skipped entirely.
 
 ### Render pipeline (`src/render-loop.ts` + `src/icons/`)
 
@@ -161,9 +167,19 @@ statusLine payload uses epoch seconds), named windows carry `utilization` while
 Windows that don't apply to the account come back as `null`, so every field is
 optional and unknown/renamed windows fall out silently.
 
-### Terminal focus on slot press (`src/warp-focus*.ts`, `src/warp-db.ts`)
+### Slot press gestures (`src/slot-action.ts`)
 
-A short press on a slot brings the session's terminal forward (`focusSession` in `warp-focus.ts`): `warp://session/<uuid>` when the hook recorded the Warp pane, the VS Code window for VS Code sessions, else the cwd → Warp tab fallback (`warp-db.ts` reads Warp's SQLite DB, `warp-focus-mac.ts` sends the tab keystroke through osascript). See `docs/warp-focus.md`.
+Two timers armed on `KeyDown`; whichever `KeyUp` arrives first cancels the rest. Under `LONG_PRESS_MS` (500 ms) it is a short press; at 500 ms the session's event log is wiped and the state re-derived; at `KILL_PRESS_MS` (3 s) the session gets `SIGTERM` then `SIGKILL` (`kill-session.ts`), with a red ring filling in between (`killArmingSince`, drawn by `render-loop.ts`). bg agents are never killable — shared daemon pid — so their second timer is never armed. The caption, focus target and session id a press acts on are pinned at `KeyDown`, because ordering shifts under the key every tick.
+
+A short press brings the session's terminal forward (`focusSession` in `warp-focus.ts`): `warp://session/<uuid>` when the hook recorded the Warp pane, the VS Code window for VS Code sessions, else the cwd → Warp tab fallback (`warp-db.ts` reads Warp's SQLite DB, `warp-focus-mac.ts` sends the tab keystroke through osascript). See `docs/warp-focus.md`. If that session has a question waiting on the deck, the same press brings it up on the answer keys.
+
+### Launcher key (`src/launcher/`)
+
+Writes `~/.warp/tab_configs/claude_deck_<slug>.toml` from the key's settings (directory, label, command, newWindow) on `willAppear` and on every settings change, only when the content differs, and presses `open warp://tab_config/<stem>` — a Warp Tab Config, not `new_tab?path=`, because only a Tab Config can run `claude` in the new tab. `tab-config.ts` is pure or `home`-parameterised so `scripts/check-launcher.mts` never touches the real `~/.warp`.
+
+### Migrating a 2.x install (`scripts/migrate-*.mjs`)
+
+`migrate-settings.mjs` removes the pre-3.0 hook commands from `~/.claude/settings.json` (they double every event now that the plugin registers its own); it refuses to remove a hook for an event the installed plugin does not yet register, so it runs *after* `claude plugin update`. `migrate-profiles.mjs` re-points keys placed with `com.julien.claudesessions` at `com.phmatray.claudedeck`; it refuses to run while the Stream Deck app is up. Both back up first and take `--dry-run`. Never run either against the real user state from an agent session — the checks cover them against fixtures.
 
 ### Reload trigger (`src/reload-watcher.ts`)
 
@@ -171,7 +187,9 @@ A short press on a slot brings the session's terminal forward (`focusSession` in
 
 ### Hook pipeline (`claude-code/hooks/`)
 
-Every registered Claude Code event runs the same hook script (`claude-code/hooks/notification.sh`, registered by `claude-code/hooks/hooks.json`). It does exactly one thing: append a single JSON line — `{"ts":…,"event":…,"tool":…?}` — to `~/.claude/sessions/<sid>.events.ndjson`. There is no mapping table. `SessionStart` truncates the log first (clean reset, bounds long-lived sessions); `SessionEnd` unlinks it.
+`claude-code/hooks/hooks.json` registers eleven events. Ten of them (SessionStart, Notification, Pre/PostToolUse, Stop, StopFailure, UserPromptSubmit, SubagentStart/Stop, SessionEnd) run the same script, `hooks/notification.sh`, all with an empty matcher; the eleventh, `PermissionRequest`, runs `bin/claude-permission` (timeout 120).
+
+`notification.sh` does exactly one thing: append one JSON line — `{"ts","event","tool"?,"notifType"?,"todos"?,"warp"?,"term"?}`, built with `jq -nc` so a quote in a tool name cannot break the log — to `~/.claude/sessions/<sid>.events.ndjson`. There is no mapping table. `SessionStart` truncates the log first (clean reset, bounds long-lived sessions); `SessionEnd` unlinks it. Keep it cheap: it runs on every single tool call, and `SessionEnd` has a 1.5 s budget.
 
 The plugin reads each session's event log every tick and replays it through the pure state machine in `src/session-events.ts` (`reduceEvents`). That function is the single source of truth for state transitions — adding a new state means one new case there plus registering the event in `claude-code/hooks/hooks.json`. No `events.json`, no per-state sidecar files, no mtime/TTL/grace heuristics.
 
@@ -185,3 +203,5 @@ PID liveness still handles the case where a CC process dies hard (no `SessionEnd
 - The Setup action's key press (and its property inspector "Refresh States" button) calls `refreshNow()` in `plugin.ts`, which `wipeAllEventLogs()` (deletes every `<sid>.events.ndjson` in the sessions dir) then runs an immediate `runSlowTick()`. The PI uses raw WebSocket against the Elgato bridge (`connectElgatoStreamDeckSocket`) — the SDK's TS API is plugin-side only.
 - Stream Deck SDK notes (registration, manifest gotchas, build-info) live in `docs/development.md`; session-introspection internals (the `<pid>.json` schema, liveness, hook patterns) are in the local skill `claude-code-process-introspection` (`.claude/skills/`). Invoke it via the `Skill` tool when relevant.
 - `docs/` holds reference notes (`architecture.md`, `development.md`, `warp-focus.md`).
+- On-deck labels are French (Autoriser, Refuser, Toujours, Retour, Terminal, "Dossier ?"); code, comments, docs and commit messages are English. Some older comments in `slot-action.ts` are French — leave them, don't add more.
+- Never commit build output: `com.phmatray.claudedeck.sdPlugin/bin/`, the generated `.streamDeckProfile`, `dist/`, `logs/`, `node_modules/`.
