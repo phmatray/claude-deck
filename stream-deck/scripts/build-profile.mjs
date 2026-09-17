@@ -27,9 +27,8 @@ const manifest = JSON.parse(readFileSync(path.join(PLUGIN_DIR, "manifest.json"),
 const PROFILE_NAME = manifest.Profiles[0].Name;
 // Name, UUID and Version come from the manifest so a version bump can't leave the profile behind.
 const PLUGIN = { Name: manifest.Name, UUID: manifest.UUID, Version: manifest.Version };
-const DEVICE_MODEL = "20GAT9901"; // Stream Deck XL — the 5x3 layout sits in its top-left corner
-const COLUMNS = 5;
-const OPTION_ROWS = [1, 2];
+const DEVICE_MODEL = "20GAT9901"; // Stream Deck XL, 8 columns x 4 rows
+const COLUMNS = 8;
 const outFile = path.join(PLUGIN_DIR, `${PROFILE_NAME}.streamDeckProfile`);
 
 function state() {
@@ -57,17 +56,20 @@ function action(suffix, settings, name) {
   };
 }
 
+// Row 0: context, header, then queue/back/terminal on the right. Rows 1-2: one
+// detail strip, a segment per key. Row 3: the option keys ("col,row" keys).
 const actions = {
   "0,0": action("ask.context", {}),
   "1,0": action("ask.header", {}),
-  "4,0": action("ask.terminal", {}),
+  "5,0": action("ask.queue", {}),
+  "6,0": action("ask.back", {}),
+  "7,0": action("ask.terminal", {}),
 };
-let slot = 0;
-for (const y of OPTION_ROWS) {
-  for (let x = 0; x < COLUMNS; x++) {
-    actions[`${x},${y}`] = action("ask.option", { slot }, `Option ${slot + 1}`);
-    slot++;
-  }
+for (let segment = 0; segment < 2 * COLUMNS; segment++) {
+  actions[`${segment % COLUMNS},${1 + Math.floor(segment / COLUMNS)}`] = action("ask.detail", { segment });
+}
+for (let slot = 0; slot < COLUMNS; slot++) {
+  actions[`${slot},3`] = action("ask.option", { slot }, `Option ${slot + 1}`);
 }
 
 const profileId = randomUUID().toUpperCase();
@@ -106,4 +108,4 @@ rmSync(outFile, { force: true });
 execFileSync("zip", ["-qry", outFile, ".", "-x", "*.DS_Store"], { cwd: staging });
 rmSync(staging, { recursive: true, force: true });
 
-console.log(`built ${path.basename(outFile)} — ${Object.keys(actions).length} keys, ${slot} option slots`);
+console.log(`built ${path.basename(outFile)} — ${Object.keys(actions).length} keys, ${COLUMNS} option slots`);

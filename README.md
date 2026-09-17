@@ -84,7 +84,7 @@ Prints `{"index":0,"label":"Add jitter","cancelled":false}`.
 |---|---|
 | `question` | Full text. Goes to the terminal, not the keys. |
 | `header` | 1-3 words. This is what the question key shows. |
-| `options` | 1-10 items. `label` on the key, `description` in the terminal. |
+| `options` | 1-8 items. `label` on the key, `description` in the terminal. |
 | `timeout` | Seconds, default 180. |
 | `context` | Top-left key. Defaults to the current directory's name. |
 
@@ -99,11 +99,12 @@ Anything other than 0 means *ask in the terminal instead* — never assume an an
 
 ### Key layout
 
-|  | 0 | 1 | 2 | 3 | 4 |
-|---|---|---|---|---|---|
-| **row 0** | context | question | — | — | Use terminal |
-| **row 1** | option 1 | option 2 | option 3 | option 4 | option 5 |
-| **row 2** | option 6 | option 7 | option 8 | option 9 | option 10 |
+|  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|---|
+| **row 0** | context | question | — | — | — | queue | back | Use terminal |
+| **row 1** | detail 1 | detail 2 | detail 3 | detail 4 | detail 5 | detail 6 | detail 7 | detail 8 |
+| **row 2** | detail 9 | detail 10 | detail 11 | detail 12 | detail 13 | detail 14 | detail 15 | detail 16 |
+| **row 3** | option 1 | option 2 | option 3 | option 4 | option 5 | option 6 | option 7 | option 8 |
 
 Unused option keys go dark. With no question pending the whole page is idle:
 
@@ -205,7 +206,7 @@ The images in this README are rendered from the plugin's own SVG key art with `r
 ## Limitations
 
 - **Stream Deck XL only.** The bundled profile targets model `20GAT9901` (`DEVICE_MODEL` in `stream-deck/scripts/build-profile.mjs`, `DeviceType` in the manifest). Other sizes need their own profile.
-- **Ten options max.** That is how many option keys the page has.
+- **Eight options max.** That is how many option keys the page has.
 - **One question at a time.** A lock file means a second question gets exit code 4 rather than stealing the deck.
 - **macOS only**, because that is all this has been tested on. Nothing in it is deeply mac-specific except the paths.
 

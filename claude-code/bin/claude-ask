@@ -19,7 +19,7 @@ const ANSWER_FILE = path.join(STATE_DIR, "answer.json");
 const LOCK_FILE = path.join(STATE_DIR, "lock");
 const POLL_MS = 150;
 const STALE_LOCK_MS = 15 * 60 * 1000;
-const MAX_OPTIONS = 10; // the profile ships ten option keys
+const MAX_OPTIONS = 8; // the profile's bottom row: eight option keys
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

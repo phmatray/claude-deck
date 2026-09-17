@@ -20,10 +20,8 @@ abstract class AskKey extends SingletonAction<AskSettings> {
   override onWillAppear(ev: WillAppearEvent<AskSettings>): Promise<void> | void {
     if (!ev.action.isKey()) return;
     const c = ev.action.coordinates;
-    // The bundled profile sets `slot`; the fallback assumes the 5-wide layout.
-    const slot = typeof ev.payload.settings.slot === "number"
-      ? ev.payload.settings.slot
-      : Math.max(0, ((c?.row ?? 1) - 1) * 5 + (c?.column ?? 0));
+    // The bundled profile sets `slot`; the fallback assumes its single option row.
+    const slot = typeof ev.payload.settings.slot === "number" ? ev.payload.settings.slot : (c?.column ?? 0);
     const key = { action: ev.action, slot };
     this.keys.set(ev.action.id, key);
     return this.paint(key.action, slot);

@@ -27,6 +27,7 @@ for (const spec of [
   { header: 5, options: ["A"] },
   { question: ["x"], options: ["A"] },
   { context: {}, options: ["A"] },
+  { options: ["1", "2", "3", "4", "5", "6", "7", "8", "9"] },
 ]) {
   const r = ask(spec);
   assert.equal(r.status, 1, `${JSON.stringify(spec)}: exit 1 (${r.stderr.trim()})`);
@@ -34,7 +35,7 @@ for (const spec of [
   assert.equal(readFileSync(path.join(dir, "lock"), "utf8"), lock, `${JSON.stringify(spec)}: lock untouched`);
 }
 
-// strings and objects mixed pass validation (timeout 0 → exit 3, deck released)
+// eight options, strings and objects mixed, pass validation (timeout 0 → exit 3, deck released)
 const free = mkdtempSync(path.join(tmpdir(), "claude-ask-input-"));
 const r = ask({ header: "H", context: null, options: ["1", "2", "3", "4", "5", "6", "7", { label: "8", description: "d" }], timeout: 0 }, free);
 assert.equal(r.status, 3, r.stderr);
