@@ -144,10 +144,14 @@ const alwaysRule = isPlan
     );
 if (alwaysRule) DECISIONS.always = { behavior: "allow", updatedPermissions: [alwaysRule] };
 
-/** That rule spelled out on the last detail line, so "Toujours" is never a blind press. */
-function ruleLine({ rules: [rule], destination }) {
+/** That rule spelled out on the last detail line, so "Toujours" is never a blind press.
+ *  A suggestion may carry several rules and the key stores all of them, so the extra ones
+ *  are counted rather than left out of what the deck shows. */
+function ruleLine({ rules, destination }) {
+  const [rule] = rules;
   const content = typeof rule.ruleContent === "string" ? `(${rule.ruleContent})` : "";
-  return `Toujours = ${rule.toolName}${content}${destination ? ` · ${destination}` : ""}`;
+  const more = rules.length > 1 ? ` (+${rules.length - 1} more)` : "";
+  return `Toujours = ${rule.toolName}${content}${more}${destination ? ` · ${destination}` : ""}`;
 }
 
 const question = {

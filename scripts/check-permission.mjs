@@ -69,6 +69,21 @@ const PYTHON = {
     { type: "addRules", rules: [{ toolName: "Bash", ruleContent: "python3 -c 'print(42)'" }], behavior: "allow", destination: "localSettings" },
   ],
 };
+// Not captured live, but the shape the filter has to survive: several suggestions, a DENY
+// rule first, and the allow rule carrying more than one rule.
+const MIXED = {
+  tool_input: { command: "git log --oneline", description: "Show the log" },
+  permission_suggestions: [
+    { type: "setMode", mode: "acceptEdits", destination: "session" },
+    { type: "addRules", rules: [{ toolName: "Bash", ruleContent: "rm -rf *" }], behavior: "deny", destination: "localSettings" },
+    {
+      type: "addRules",
+      rules: [{ toolName: "Bash", ruleContent: "git log:*" }, { toolName: "Bash", ruleContent: "git show:*" }],
+      behavior: "allow",
+      destination: "localSettings",
+    },
+  ],
+};
 const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
 
 // Autoriser → allow; the question carries the session, kind, detail and option ids
@@ -96,7 +111,9 @@ const decision = (out) => JSON.parse(out).hookSpecificOutput.decision;
 const plan = { session_id: "s1", cwd: "/work/horizon-hub", permission_mode: "plan", tool_name: "ExitPlanMode", tool_input: { plan: "# Plan\n1. x\n## Step 2\nfix issue #42\n#hashtag stays", planFilePath: "/tmp/p.md" }, permission_suggestions: null };
 {
   const { home } = session();
-  const { askDir, done } = run(plan, home);
+  // With a suggestion attached (captured plans have none): still no "Toujours" key, because a
+  // hook "allow" can't approve a plan — the key would store a rule and leave the dialog up.
+  const { askDir, done } = run({ ...plan, permission_suggestions: PYTHON.permission_suggestions }, home);
   const q = await waitQuestion(askDir);
   assert.equal(q.kind, "plan");
   assert.equal(q.header, "Plan prêt");
@@ -133,6 +150,26 @@ for (const answer of [(q) => ({ id: q.id, cancelled: true, reason: "terminal" })
   assert.equal(q.detail, "python3 -c 'print(42)'\n\nRun Python command\nToujours = Bash(python3 -c 'print(42)') · localSettings");
   press(askDir, q, "always");
   assert.deepEqual(decision((await done).out), { behavior: "allow", updatedPermissions: PYTHON.permission_suggestions });
+}
+
+// Only the addRules suggestion that ALLOWS is stored, and only it: a deny rule sitting earlier
+// in the list must not be echoed as an allow, and the rest of the list (setMode…) never travels
+// with it. Its extra rules are counted on the detail line, since the key stores them all.
+{
+  const { home } = session();
+  const { askDir, done } = run({ ...bash, ...MIXED }, home);
+  const q = await waitQuestion(askDir);
+  assert.deepEqual(q.options, [
+    { id: "allow", label: "Autoriser" },
+    { id: "always", label: "Toujours" },
+    { id: "deny", label: "Refuser" },
+  ]);
+  assert.equal(q.detail, "git log --oneline\n\nShow the log\nToujours = Bash(git log:*) (+1 more) · localSettings");
+  press(askDir, q, "always");
+  assert.deepEqual(decision((await done).out), {
+    behavior: "allow",
+    updatedPermissions: [MIXED.permission_suggestions[2]],
+  });
 }
 
 // Suggestions with no rule to store (addDirectories + setMode, the captured mkdir) → no Toujours
