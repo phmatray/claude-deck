@@ -30,9 +30,10 @@ assert.equal(projectLimit({ ...read3h, percent: 60 }), undefined, "landing exact
 assert.equal(projectLimit({ ...read3h, percent: 59 }), undefined, "past the reset → the countdown keeps the footer");
 assert.equal(projectLimit({ ...read3h, percent: 100 }), 3 * H, "already spent → the reading's own time");
 assert.equal(projectLimit({ ...read3h, percent: 104, resetsAtMs: undefined }), 3 * H, "…even with no reset in the payload");
+assert.equal(projectLimit({ percent: 100, fetchedAtMs: 5 * MIN, resetsAtMs: W5, windowMs: W5 }), 5 * MIN, "…and at exactly 100%, which doesn't wait for the 10-minute gate");
 assert.equal(projectLimit({ ...read3h, percent: 0 }), undefined, "nothing burned, no pace");
 assert.equal(projectLimit({ ...read3h, percent: -1 }), undefined, "a nonsense percentage never projects");
-assert.equal(projectLimit({ ...read3h, percent: 50, resetsAtMs: undefined }), undefined, "no reset and no start → nothing to extrapolate from");
+assert.equal(projectLimit({ ...read3h, percent: 50, resetsAtMs: undefined }), undefined, "no reset → no window start to extrapolate from");
 assert.equal(projectLimit({ percent: 5, fetchedAtMs: 9 * MIN, resetsAtMs: W5, windowMs: W5 }), undefined, "9 min in, the integer percent is still noise");
 assert.equal(projectLimit({ percent: 5, fetchedAtMs: 10 * MIN, resetsAtMs: W5, windowMs: W5 }), 200 * MIN, "10 min at 5% → 3h20m");
 assert.equal(projectLimit({ percent: 5, fetchedAtMs: 0, resetsAtMs: W5, windowMs: W5 }), undefined, "a reading at the window start");
@@ -150,16 +151,22 @@ assert.deepEqual(footerOf("seven_day", { percent: 100, resetsAtMs: reset7d, proj
 // A window the payload gives no reset for can't be shown to be over, so 100% still reads
 // as spent rather than merely old.
 assert.deepEqual(footerOf("five_hour", { percent: 100, projectedLimitMs: FETCHED_AT }), ["limite atteinte", "#ef4444"]);
-// The projection is frozen at fetch time: once `now` has gone past it, saying "limite
-// ~12:05" at 12:30 would be plainly wrong, so the still-exact countdown takes over.
-const overtaken = { percent: 90, resetsAtMs: Date.parse(RESET_5H), projectedLimitMs: FETCHED_AT + 5 * MIN };
-assert.deepEqual(footerOf("five_hour", overtaken, FETCHED_AT + 4 * MIN), ["limite ~12:05", "#ef4444"]);
-assert.deepEqual(footerOf("five_hour", overtaken, FETCHED_AT + 30 * MIN), ["resets in 1h30m", "#9ca3af"]);
+// A projection is drawn for as long as its window lives, `now` having gone past it
+// included. At 99%, three hours into the 5-hour window, the pace puts the limit ~1m49s
+// after the reading — so a key that dropped an overtaken projection would spend most of
+// every ~5½-minute snapshot showing the muted "resets in 1h58m" instead, and flip back
+// on the next one: the tightest moment of the window drawn as the calmest, twice a
+// snapshot. The footer must not depend on `now` here.
+const hot99 = (await snapshotOf((u) => (u.five_hour.utilization = 99))).fiveHour!;
+assert.ok(hot99.projectedLimitMs! < FETCHED_AT + 2 * MIN, "at 99% the projection is minutes, not hours, ahead of the reading");
+for (const m of [0, 2, 3, 6]) {
+  assert.deepEqual(footerOf("five_hour", hot99, FETCHED_AT + m * MIN), ["limite ~12:00", "#ef4444"], `the 99% footer holds still at now+${m}m`);
+}
 
 // ── clock formatting ─────────────────────────────────────────────────────────
 const FAR_RESET = Date.parse("2026-09-30T00:00:00Z");
-// Every projection here is deliberately ahead of NOW: one already gone by would (rightly)
-// be replaced by the countdown, and this block is about how a live projection is spelled.
+// These windows exist only to exercise the spelling: a far-off reset and a low percentage
+// keep them on the projection branch, whatever `now` is.
 const at = (local: string, percent = 20): UsageWindow => ({ percent, resetsAtMs: FAR_RESET, projectedLimitMs: Date.parse(local) });
 
 assert.equal(footerOf("five_hour", at("2026-09-17T14:32:00+02:00"))[0], "limite ~14:30", "rounded down to 5 min");

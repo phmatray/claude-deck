@@ -146,9 +146,13 @@ recognise its `cwd` and drop it (the pre-rename `~/.claude/.streamdeck-usage` is
 still hidden for one release).
 
 Staleness on the tile: `fetchedAtMs` past 15 minutes raises a corner dot, warning that
-the *percentage* may lag. The reset countdown is never suppressed for age — `resets_at`
-is an absolute timestamp and stays true — so the footer only states the snapshot's age
-when there is no future reset left to count down to.
+the *percentage* may lag. Nothing else is suppressed for age. The footer says, in order:
+the snapshot's age once the window's `resets_at` has gone by (the reading then describes
+a window that no longer exists); `limite atteinte` at 100 %; `limite ~HH:MM` from the
+stateless burn-rate projection (`projectLimit`), shown even once that instant has passed,
+since the refresher pushes it forward every ~5½ minutes and dropping it at 99 % made the
+key flip to the calm-looking countdown; otherwise the countdown to `resets_at`, which is
+an absolute timestamp and stays true however old the reading is.
 
 Note the shape differences that bite: `resets_at` is an **ISO string** here (the
 statusLine payload uses epoch seconds), named windows carry `utilization` while

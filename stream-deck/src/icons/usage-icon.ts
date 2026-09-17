@@ -151,11 +151,17 @@ function singleFooter(kind: UsageKind, w: UsageWindow, snapshot: UsageSnapshot, 
   // `accent` is red at this point — accentFor(>=90) — and nothing else on the
   // key says the limit is spent rather than nearly spent.
   if (w.percent >= 100) return footer("limite atteinte", accent);
-  // The projection is frozen at fetch time while `now` keeps moving, and the
-  // snapshot only refreshes every ~5½ min: once it has been overtaken the key
-  // would be forecasting a moment already gone by, where the countdown — an
-  // absolute timestamp — is still exact.
-  if (w.projectedLimitMs !== undefined && w.projectedLimitMs > now) {
+  // Drawn even once `now` has gone past it. The projection is frozen at fetch
+  // time, but `usage-refresh.ts` re-asks every ~5½ min while a usage key is on
+  // the deck, and a fresh reading at the same percentage pushes the projection
+  // forward (elapsed grew) — so what is printed is minutes stale at worst.
+  // Suppressing an overtaken one instead looked tidy and read terribly: at
+  // 98-99% late in a window the projection sits barely two minutes ahead of the
+  // reading it came from, so the key flipped to the muted "resets in 57m" for
+  // the rest of every snapshot — the tightest moment of the window drawn as the
+  // calmest, repainting twice per snapshot. A window whose reset has gone by is
+  // already out above, and the stale dot covers a plugin that stopped asking.
+  if (w.projectedLimitMs !== undefined) {
     return footer(`limite ~${clockText(w.projectedLimitMs, kind === "seven_day")}`, accent);
   }
   return w.resetsAtMs === undefined ? aged : footer(untilText(w.resetsAtMs, now), MUTED);
