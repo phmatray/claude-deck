@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Corepack downloads the pnpm version pinned in stream-deck/package.json; on a
+  # non-interactive runner the confirmation prompt would fail the job instead.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        working-directory: stream-deck
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Build (rollup + bundled profile)
+        working-directory: stream-deck
+        run: corepack pnpm build
+
+      - name: Validate the Stream Deck plugin
+        working-directory: stream-deck
+        run: corepack pnpm exec streamdeck validate com.phmatray.claudedeck.sdPlugin --no-update-check
+
+      # Every check is listed by name on purpose. A glob would eventually pick up a
+      # `probe-*` script, and those need the real deck and the real ~/.claude — they
+      # are for a human at the hardware, never for CI.
+      - name: Plugin checks
+        working-directory: stream-deck
+        run: |
+          corepack pnpm exec tsx scripts/check-animation-budget.mts
+          corepack pnpm exec tsx scripts/check-ask-controller.mts
+          corepack pnpm exec tsx scripts/check-ask-detail.mts
+          corepack pnpm exec tsx scripts/check-ask-keys.mts
+          corepack pnpm exec tsx scripts/check-ask-render.mts
+          corepack pnpm exec tsx scripts/check-env-paths.mts
+          corepack pnpm exec tsx scripts/check-focus-stamp.mts
+          corepack pnpm exec tsx scripts/check-hook-check.mts
+          corepack pnpm exec tsx scripts/check-launcher.mts
+          corepack pnpm exec tsx scripts/check-live-pids.mts
+          corepack pnpm exec tsx scripts/check-pending-question.mts
+          corepack pnpm exec tsx scripts/check-usage-projection.mts
+          node scripts/check-profile.mjs
+
+      - name: Claude Code plugin checks
+        run: |
+          node scripts/check-ask-input.mjs
+          node scripts/check-ask-queue.mjs
+          node scripts/check-migrate-profiles.mjs
+          node scripts/check-migrate-settings.mjs
+          node scripts/check-permission.mjs
