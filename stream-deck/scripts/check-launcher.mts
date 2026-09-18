@@ -39,7 +39,7 @@ assert.equal(expandHome("   ", home), "", "…spaces included");
 // inside the Stream Deck app's own folder that the key would then look configured for.
 assert.equal(expandHome("~notauser/x", home), "", "only ~/ expands: ~user is the shell's trick, not ours");
 assert.equal(expandHome("repo/x", home), "", "a relative path is not a project");
-assert.equal(expandHome("Users/philippe/repo/x", home), "", "…nor is one that just lost its leading slash");
+assert.equal(expandHome("Users/me/repo/x", home), "", "…nor is one that just lost its leading slash");
 assert.notEqual(expandHome("repo/x", home), resolve("repo/x"), "and it is certainly not cwd/repo/x");
 
 // ── slug: readable, filename-safe, and collision-free ────────────────────────
