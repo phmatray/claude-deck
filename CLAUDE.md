@@ -205,3 +205,5 @@ PID liveness still handles the case where a CC process dies hard (no `SessionEnd
 - `docs/` holds reference notes (`architecture.md`, `development.md`, `warp-focus.md`).
 - On-deck labels are French (Autoriser, Refuser, Toujours, Retour, Terminal, "Dossier ?"); code, comments, docs and commit messages are English. Some older comments in `slot-action.ts` are French — leave them, don't add more.
 - Never commit build output: `com.phmatray.claudedeck.sdPlugin/bin/`, the generated `.streamDeckProfile`, `dist/`, `logs/`, `node_modules/`.
+- **Never hand-bump a version.** release-please owns the release version and writes `.claude-plugin/marketplace.json`, `claude-code/.claude-plugin/plugin.json` and `stream-deck/package.json`; the Stream Deck manifest's 4-part `Version` is stamped from the first of those by `scripts/build-profile.mjs` on every build, and `scripts/check-versions.mjs` asserts all four agree. Cutting a release means merging the release PR — see `docs/development.md`.
+- Commit subjects are Conventional Commits, and so is every PR title (it is the squash subject, and therefore the changelog entry).

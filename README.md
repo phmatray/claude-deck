@@ -119,7 +119,15 @@ claude plugin marketplace add phmatray/claude-deck
 claude plugin install claude-deck@phmatray
 ```
 
-That installs the status hooks, the permission hook and the `ask-on-streamdeck` skill. `claude-ask` ships in the plugin's `bin/` (`claude-code/bin/claude-ask` here); it is not put on your `PATH`. Claude Code only refreshes its installed copy when the version changes: bump `version` in `.claude-plugin/marketplace.json` and `claude-code/.claude-plugin/plugin.json`, then `claude plugin marketplace update phmatray && claude plugin update claude-deck@phmatray`.
+That installs the status hooks, the permission hook and the `ask-on-streamdeck` skill. `claude-ask` ships in the plugin's `bin/` (`claude-code/bin/claude-ask` here); it is not put on your `PATH`.
+
+To pick up a later release:
+
+```bash
+claude plugin marketplace update phmatray && claude plugin update claude-deck@phmatray
+```
+
+Claude Code caches its own copy and only replaces it when the version changes, so nothing happens until there is a new release — and a session already running keeps the hooks it started with. Restart it.
 
 ### 3. Tell Claude to use it
 

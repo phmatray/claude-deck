@@ -1,0 +1,112 @@
+name: release-please
+
+# Conventional-Commits-driven releases. On every push to `main`, release-please keeps a release PR
+# up to date (rewriting CHANGELOG.md, .release-please-manifest.json and the three version fields
+# listed in release-please-config.json). Merging that PR tags vX.Y.Z and creates the GitHub Release;
+# the `release_created` output then gates the `package` job in THIS same run.
+#
+# Packaging lives here rather than in a tag-triggered workflow, and it has to: release-please creates
+# the tag with GITHUB_TOKEN, and GitHub deliberately does not fire `on: push: tags` (or `on: release`)
+# for events created by that token. The release.yml this replaced would therefore never have run
+# again — silently, with no failed run to notice, and every release page left with no installer
+# attached. That is the whole reason the two jobs are one workflow.
+
+on:
+  push:
+    branches: [main]
+  # Manual re-run, for when the push-triggered run failed or was missed. NOT an unconditional
+  # dry-run: with no merged release PR waiting, release_created stays false and `package` skips.
+  # But if a release PR was already merged and its run did not complete, a dispatch legitimately
+  # finishes the job — tag, Release and installer. That is the intended recovery path.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  # Required to create and apply the `autorelease: pending` label. release-please finds a merged
+  # release PR *solely* by that label, and this repository has no `autorelease:*` label yet, so it
+  # must create one (POST /repos/{o}/{r}/labels — an Issues-scoped endpoint). Without this the
+  # release PR is opened and can be merged, but is never recognised afterwards: no tag, no Release,
+  # `release_created` stays false, nothing is packaged, and no step fails.
+  issues: write
+
+# Serialize release-please runs: the action pushes a release-PR branch and, on merge, creates the
+# tag and the Release. Two overlapping runs could race on the tag and the manifest, and cancelling
+# mid-tag can leave them half-applied — so never cancel one in progress.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Builds the installer for the release the job above just tagged and attaches it. Without this,
+  # the Release exists with notes and no `.streamDeckPlugin` — which is the only thing that imports
+  # the bundled profile, so a release with no asset is a release nobody can install.
+  package:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A job-level permissions block REPLACES the workflow-level one rather than adding to it, so the
+    # scope this job needs has to be restated here.
+    permissions:
+      contents: write # upload the asset to the Release release-please created
+    steps:
+      # The tree must be the released commit: it carries release-please's version bumps, and
+      # build-profile.mjs stamps the Stream Deck manifest from them.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Installs, builds and packs: dist/com.phmatray.claudedeck.streamDeckPlugin.
+      # Needs `zip` on PATH for the bundled profile (ubuntu-latest has it).
+      - name: Pack the Stream Deck plugin
+        run: scripts/package.sh
+
+      # Assert the artifact before it leaves the building. A green pack only means the command
+      # exited 0; it does not prove the bundled profile is in the archive, and a plugin installed
+      # without its profile loads, registers, and then silently cannot switch the deck to the
+      # answer keys. The version check catches the other half: an installer whose manifest still
+      # claims the previous release.
+      - name: Verify the packed plugin
+        run: |
+          want="${{ needs.release-please.outputs.version }}.0"
+          pkg="dist/com.phmatray.claudedeck.streamDeckPlugin"
+          if ! unzip -l "$pkg" | grep -q "Claude Deck.streamDeckProfile"; then
+            echo "::error::$pkg has no bundled profile — the installer is the only thing that imports it, so the answer keys would never appear."
+            exit 1
+          fi
+          got="$(unzip -p "$pkg" "*/manifest.json" | jq -r .Version)"
+          if [ "$got" != "$want" ]; then
+            echo "::error::Packed manifest Version is $got, expected $want for this release."
+            exit 1
+          fi
+          echo "Packed plugin OK: version $got, bundled profile present."
+
+      # release-please already created the Release with notes from CHANGELOG.md, so this only
+      # attaches the asset. --clobber keeps a re-run idempotent.
+      - name: Attach the installer to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/*.streamDeckPlugin --clobber

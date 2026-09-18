@@ -74,4 +74,5 @@ jobs:
           node scripts/check-migrate-profiles.mjs
           node scripts/check-migrate-settings.mjs
           node scripts/check-permission.mjs
+          node scripts/check-versions.mjs
           node scripts/check-ci-scripts.mjs

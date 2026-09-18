@@ -23,7 +23,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLUGIN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "com.phmatray.claudedeck.sdPlugin");
-const manifest = JSON.parse(readFileSync(path.join(PLUGIN_DIR, "manifest.json"), "utf8"));
+const MANIFEST_FILE = path.join(PLUGIN_DIR, "manifest.json");
+
+// The manifest's Version is derived, not hand-maintained. release-please owns the release
+// version and writes plain semver into the three JSON manifests that can hold it; Stream
+// Deck's validator rejects anything but {major}.{minor}.{patch}.{build}, so this is the one
+// place the fourth part is added. Stamping it here — on every build, before the profile is
+// written — is what keeps the profile's embedded Plugin.Version, the manifest and the
+// release in agreement; scripts/check-versions.mjs is the assert that they are.
+const RELEASE_VERSION = JSON.parse(
+  readFileSync(path.resolve(PLUGIN_DIR, "..", "..", "claude-code", ".claude-plugin", "plugin.json"), "utf8"),
+).version;
+const manifestText = readFileSync(MANIFEST_FILE, "utf8");
+const manifest = JSON.parse(manifestText);
+if (manifest.Version !== `${RELEASE_VERSION}.0`) {
+  // A string replace, not a re-serialise: the manifest is hand-formatted and a JSON.stringify
+  // round-trip would reflow the whole file on a version bump.
+  writeFileSync(MANIFEST_FILE, manifestText.replace(`"Version": "${manifest.Version}"`, `"Version": "${RELEASE_VERSION}.0"`));
+  console.log(`manifest.json Version ${manifest.Version} -> ${RELEASE_VERSION}.0`);
+  manifest.Version = `${RELEASE_VERSION}.0`;
+}
 const PROFILE_NAME = manifest.Profiles[0].Name;
 // Name, UUID and Version come from the manifest so a version bump can't leave the profile behind.
 const PLUGIN = { Name: manifest.Name, UUID: manifest.UUID, Version: manifest.Version };

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+<!--
+  This file is generated and owned by release-please. Do not hand-edit it, and do not add an
+  "Unreleased" section: your PR title is the changelog entry, and release-please writes the next
+  release's section here when it opens the release PR.
+-->
+
 Versions before 3.0.0 belong to the two upstream projects this one merges; their history
 is in this repository, but their release notes are not.
 

@@ -197,5 +197,5 @@ stream-deck/
     ├── probe-states.ts                 paint every state on a real deck
     └── check-*.mts|mjs                 hermetic self-checks (CI runs these)
 docs/                                   this file, development.md, warp-focus.md, deck-*.png
-.github/workflows/                      ci.yml (every check) and release.yml (tags v*)
+.github/workflows/                      ci.yml (every check), pr-title.yml, release-please.yml (release + installer)
 ```

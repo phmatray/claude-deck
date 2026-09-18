@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "$comment": "release-type is `simple` rather than `node`: there is no package at the repository root, and the two package.json files here are private build manifests, not published packages. The extra-files below are the three JSON fields that can hold a plain semver. The Stream Deck manifest's Version is deliberately absent — its validator demands {major}.{minor}.{patch}.{build}, so stream-deck/scripts/build-profile.mjs derives it from claude-code/.claude-plugin/plugin.json at build time and scripts/check-versions.mjs asserts they agree. include-component-in-tag stays false so the tag is plain vX.Y.Z, which is what release.yml's successor and the README's download link expect. The sections use Keep a Changelog vocabulary because CHANGELOG.md declares that format and its 3.0.0 entry already uses those headings.",
+      "release-type": "simple",
+      "package-name": "claude-deck",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/marketplace.json",
+          "jsonpath": "$.plugins[0].version"
+        },
+        {
+          "type": "json",
+          "path": "claude-code/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "stream-deck/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Added" },
+        { "type": "fix", "section": "Fixed" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Changed" },
+        { "type": "revert", "section": "Reverted" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "build", "section": "Changed" },
+        { "type": "ci", "section": "Changed" },
+        { "type": "chore", "section": "Miscellaneous", "hidden": true },
+        { "type": "style", "section": "Miscellaneous", "hidden": true },
+        { "type": "test", "section": "Miscellaneous", "hidden": true }
+      ]
+    }
+  }
+}

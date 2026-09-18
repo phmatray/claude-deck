@@ -72,9 +72,17 @@ The plugin watches `~/.claude/.claude-deck.reload` once per second. On mtime cha
 
 ## Releasing
 
-`.github/workflows/ci.yml` runs build, validate and every check on ubuntu-latest for each push and pull request. `.github/workflows/release.yml` fires on a `v*` tag: it runs `scripts/package.sh` and attaches `dist/com.phmatray.claudedeck.streamDeckPlugin` to a GitHub release.
+`.github/workflows/ci.yml` runs build, validate and every check on ubuntu-latest for each push and pull request. `.github/workflows/pr-title.yml` asserts the PR title is a Conventional Commit, because that title is the squash subject and therefore the changelog entry.
 
-So cutting a release is: bump `version` in `.claude-plugin/marketplace.json`, `claude-code/.claude-plugin/plugin.json`, `stream-deck/package.json` and `Version` in the manifest (4-part there), commit, then `git tag v3.0.1 && git push --tags`.
+**Releases are cut by release-please, not by hand.** On every push to `main` it keeps a release PR open, rewriting `CHANGELOG.md`, `.release-please-manifest.json` and the three version fields in `release-please-config.json`'s `extra-files`. Merging that PR tags `vX.Y.Z`, creates the GitHub Release from the changelog, and — in the same workflow run — packs `dist/com.phmatray.claudedeck.streamDeckPlugin` and attaches it.
+
+So cutting a release is: **merge the release PR.** Nothing else.
+
+Two things to know before touching that machinery:
+
+- **Packaging cannot move back into a tag-triggered workflow.** release-please creates the tag with `GITHUB_TOKEN`, and GitHub does not fire `on: push: tags` (or `on: release`) for events created by that token — the job would simply never run, with nothing failing to tell you. That is why `release-please.yml` packs in a job gated on its own `release_created` output.
+- **The Stream Deck manifest's `Version` is derived, not written by release-please.** Its validator demands `{major}.{minor}.{patch}.{build}`, so `scripts/build-profile.mjs` stamps it from `claude-code/.claude-plugin/plugin.json` on every build, and `scripts/check-versions.mjs` asserts all four fields agree. Never hand-edit it; run `pnpm build`.
+- **`scripts/package.sh` packs from a throwaway copy.** `streamdeck pack` rewrites the manifest it is given — it pads `Version` to four parts and has no undo — so packing in place would dirty the tree on every build and fight the stamping above.
 
 ## Tweaks
 
