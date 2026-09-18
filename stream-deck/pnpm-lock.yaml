@@ -32,7 +32,7 @@ importers:
         version: 12.3.0(rollup@4.60.3)(tslib@2.8.1)(typescript@5.9.3)
       '@tsconfig/node20':
         specifier: ^20.1.2
-        version: 20.1.9
+        version: 20.1.10
       '@types/node':
         specifier: ~20.15.0
         version: 20.15.0
@@ -62,6 +62,7 @@ packages:
   '@elgato/streamdeck@1.4.1':
     resolution: {integrity: sha512-nk3TWfSvLrMWR6AhD6DG/pnJhWR6/xzP9elH/VLaiyZ27Nxb1Hu3rPuRty6xE5AZykwf3Auafok016wZSJZ3TA==}
     engines: {node: '>=20.5.1'}
+    deprecated: Plugins built with 1.x are not compatible with Marketplace; please upgrade to 2.x or higher.
 
   '@esbuild/aix-ppc64@0.27.7':
     resolution: {integrity: sha512-EKX3Qwmhz1eMdEJokhALr0YiD0lhQNwDqkPYyPhiSwKrh7/4KRjQc04sZ8db+5DVVnZ1LmbNDI1uAMPEUBnQPg==}
@@ -627,8 +628,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@tsconfig/node20@20.1.9':
-    resolution: {integrity: sha512-IjlTv1RsvnPtUcjTqtVsZExKVq+KQx4g5pCP5tI7rAs6Xesl2qFwSz/tPDBC4JajkL/MlezBu3gPUwqRHl+RIg==}
+  '@tsconfig/node20@20.1.10':
+    resolution: {integrity: sha512-5OZgdnxbFuvwm05iVwPXMU5/7iPuVDDZzAnxPDLj+kjN7fwQZSSVgHQhKTNkBPOO6Qef2D5MxPAoPLCGqE2VuQ==}
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -1428,7 +1429,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.3':
     optional: true
 
-  '@tsconfig/node20@20.1.9': {}
+  '@tsconfig/node20@20.1.10': {}
 
   '@types/estree@1.0.8': {}
 
