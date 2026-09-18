@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "timezone": "Europe/Brussels",
+  "packageRules": [
+    {
+      "description": "Minor and patch bumps carry no API change here; batch them and let CI decide.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "The Stream Deck SDK and CLI move with the host app — never automerge those.",
+      "matchPackageNames": ["@elgato/streamdeck", "@elgato/cli"],
+      "automerge": false
+    }
+  ]
+}

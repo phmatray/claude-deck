@@ -1,0 +1,8 @@
+# Normalise line endings in the repository regardless of the checkout platform.
+# The hooks and scripts are POSIX shell run by Claude Code and the Stream Deck app:
+# a CRLF would make `#!/usr/bin/env node` fail with a bare "no such file".
+* text=auto eol=lf
+
+*.png binary
+*.streamDeckPlugin binary
+*.streamDeckProfile binary

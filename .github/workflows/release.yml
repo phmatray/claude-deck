@@ -7,12 +7,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  # Never cancel a release mid-upload: a half-published tag has no second chance.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

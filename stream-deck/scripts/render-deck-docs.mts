@@ -1,4 +1,4 @@
-// Renders docs/deck-{permission,plan,ask}.png: the "Claude Deck" answer page as the XL
+// Renders .github/deck-{permission,plan,ask}.png: the "Claude Deck" answer page as the XL
 // shows it (8x4, build-profile.mjs's layout) for each kind of question, every key drawn
 // by the plugin's own key art. The question fixtures mirror what claude-permission and
 // claude-ask write. Not a check: the text needs the system fonts (Helvetica, Menlo).
@@ -93,7 +93,7 @@ for (const [name, q] of Object.entries(fixtures)) {
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" rx="28" fill="#000"/>${body}</svg>`;
   const png = new Resvg(svg, { font: { loadSystemFonts: true, defaultFontFamily: "Helvetica" } }).render().asPng();
-  const out = fileURLToPath(new URL(`../../docs/deck-${name}.png`, import.meta.url));
+  const out = fileURLToPath(new URL(`../../.github/deck-${name}.png`, import.meta.url));
   writeFileSync(out, png);
-  console.log(`  docs/deck-${name}.png (${width}x${height}, ${Math.round(png.length / 1024)} KB)`);
+  console.log(`  .github/deck-${name}.png (${width}x${height}, ${Math.round(png.length / 1024)} KB)`);
 }

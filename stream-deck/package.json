@@ -17,7 +17,8 @@
     "sd:pack": "streamdeck pack com.phmatray.claudedeck.sdPlugin --output ../dist/ --force --no-update-check",
     "sd:dev": "streamdeck dev",
     "sd:reload": "bash scripts/reload-plugin.sh",
-    "probe:states": "tsx scripts/probe-states.ts"
+    "probe:states": "tsx scripts/probe-states.ts",
+    "banner:render": "tsx scripts/render-banner.mts"
   },
   "devDependencies": {
     "@elgato/cli": "^1.7.4",

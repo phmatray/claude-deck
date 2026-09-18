@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a problem with the dashboard keys, the answer keys, the hooks or the launcher
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. This project drives real hardware, so the version and
+        environment fields below are what make a bug reproducible — please fill them in.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did the keys, the terminal or the plugin actually do?
+      placeholder: The permission prompt never reached the deck; the terminal dialog stayed up.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start `claude` in a project
+        2. Ask it to run a command that needs approval
+        3. Watch the deck
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Session dashboard keys
+        - Answer keys / permission prompts
+        - Plan keys
+        - Usage keys
+        - Launcher key
+        - Hooks / install / migration
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Stream Deck model and app version
+      description: The bundled profile targets the XL (8 x 4). Settings -> About gives the app version.
+      placeholder: Stream Deck XL (20GAT9901), app 7.4.2
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: macOS version, Claude Code version, Claude Deck version
+      placeholder: macOS 15.6, claude 2.1.276, claude-deck 3.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Plugin log: `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.
+        For hooks that do not fire, paste `sh scripts/probe-hooks.sh`.
+        For a laggy deck, paste `sh scripts/probe-deck-link.sh`.
+        Redact anything sensitive — paths and repo names can be replaced.
+      render: text

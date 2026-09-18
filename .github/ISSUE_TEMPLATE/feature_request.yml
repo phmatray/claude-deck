@@ -1,0 +1,41 @@
+name: Feature Request
+description: Suggest a key, a gesture or a behaviour for Claude Deck
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. The most useful requests say what you are trying to do at
+        the deck, not only what to build.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation at the keyboard or at the deck that this would improve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would it look like?
+      description: Which key, which gesture, what it draws, what happens on press.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints you have checked
+      description: Not blockers — just things that have bitten this project before.
+      options:
+        - label: It works on a Stream Deck XL (8 x 4), the only layout the bundled profile ships.
+        - label: It needs no daemon and no network call.
+        - label: If it answers Claude Code, a hook can actually do it (a hook cannot approve a plan, and cannot answer `AskUserQuestion`).

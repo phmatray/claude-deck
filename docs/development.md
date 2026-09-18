@@ -17,7 +17,7 @@ Run these from `stream-deck/`.
 | `pnpm sd:dev` | Enable Stream Deck developer mode (one-time) |
 | `pnpm icons:render` | Regenerate `icons/*.svg` reference assets from `src/icons/` |
 | `pnpm icons:static` | Rasterize the manifest PNGs from `assets/svg/` via `@resvg/resvg-js` |
-| `pnpm docs:render` | Regenerate `../docs/deck-{permission,plan,ask}.png` from the answer-key art |
+| `pnpm docs:render` | Regenerate `../.github/deck-{permission,plan,ask}.png` from the answer-key art |
 
 ## Checks and probes
 

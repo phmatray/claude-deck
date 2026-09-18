@@ -21,7 +21,7 @@ pnpm sd:link / sd:unlink           # (re)create the symlink into Plugins/
 bash ../scripts/probe-hooks.sh     # probe, NOT for agents: reads the real ~/.claude to check the installed plugin's hooks
 pnpm icons:render       # regenerate icons/*.svg reference assets from src/icons/
 pnpm icons:static       # rasterize manifest PNGs from assets/svg/ via @resvg/resvg-js
-pnpm docs:render        # regenerate ../docs/deck-{permission,plan,ask}.png from the answer-key art
+pnpm docs:render        # regenerate ../.github/deck-{permission,plan,ask}.png from the answer-key art
 ```
 
 There is **no test framework and no lint script**. Verify by `pnpm build && pnpm sd:validate`, then every self-check, then `pnpm sd:reload` and watch logs at `~/Library/Logs/ElgatoStreamDeck/com.phmatray.claudedeck.sdPlugin/`.

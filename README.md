@@ -1,11 +1,36 @@
+![Claude Deck banner](.github/banner.png)
+
 # Claude Deck
+
+> **Every Claude Code session on a key — and answer its prompts with one press.**
+> A live dashboard for the sessions you run in parallel, and the permission prompt,
+> the plan and the question landing on the keys with the full command spelled out.
+
+<!-- Badges: Row 1 — Identity -->
+[![phmatray - claude-deck](https://img.shields.io/static/v1?label=phmatray&message=claude-deck&color=blue&logo=github)](https://github.com/phmatray/claude-deck)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS%2012%2B-lightgrey?logo=apple)](#requirements)
+[![Stream Deck XL](https://img.shields.io/badge/Stream%20Deck-XL%208%C3%974-black)](#requirements)
+
+<!-- Badges: Row 2 — Activity -->
+[![Stars](https://img.shields.io/github/stars/phmatray/claude-deck?style=social)](https://github.com/phmatray/claude-deck/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/phmatray/claude-deck)](https://github.com/phmatray/claude-deck/commits)
+[![Issues](https://img.shields.io/github/issues/phmatray/claude-deck)](https://github.com/phmatray/claude-deck/issues)
+
+<!-- Badges: Row 3 — Quality -->
+[![CI](https://github.com/phmatray/claude-deck/actions/workflows/ci.yml/badge.svg)](https://github.com/phmatray/claude-deck/actions/workflows/ci.yml)
+[![Conventional Commits](https://img.shields.io/badge/commits-conventional-fe5196?logo=conventionalcommits)](https://www.conventionalcommits.org)
+
+<!-- Badges: Row 4 — Distribution -->
+[![Latest release](https://img.shields.io/github/v/release/phmatray/claude-deck?display_name=tag)](https://github.com/phmatray/claude-deck/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/phmatray/claude-deck/total)](https://github.com/phmatray/claude-deck/releases)
 
 Claude Code on a Stream Deck XL, in two halves that ship as one thing:
 
 - **Session dashboard** — one key per running `claude` session, colour = state. Press a key to bring that session's terminal to the front (the exact Warp pane, or the VS Code window). Plus plan-usage keys (5 h, week, per model) and a launcher key that opens a project in Warp with `claude` already running.
 - **Answer keys** — Claude's multiple-choice questions and its permission prompts (**Autoriser** / **Toujours** / **Refuser**) go on the keys, the full command or question spelled out across two rows, one press answers.
 
-![A permission prompt on the deck](docs/deck-permission.png)
+![A permission prompt on the deck](.github/deck-permission.png)
 
 | Path | What |
 |---|---|
@@ -14,6 +39,40 @@ Claude Code on a Stream Deck XL, in two halves that ship as one thing:
 | `.claude-plugin/marketplace.json` | the `phmatray` marketplace, pointing at `claude-code/` |
 | `scripts/` | packaging, the two migrations, `check-*` self-checks, `probe-*` live probes |
 | `docs/` | [architecture](docs/architecture.md), [development](docs/development.md), [Warp focus](docs/warp-focus.md) |
+
+## Table of Contents
+
+- [Why this exists](#why-this-exists)
+- [State gallery](#state-gallery)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Upgrading from the two-plugin setup](#upgrading-from-the-two-plugin-setup)
+- [How it works](#how-it-works)
+- [Key reference](#key-reference)
+- [Asking from the CLI](#asking-from-the-cli)
+- [Limitations](#limitations)
+- [Tech stack](#tech-stack)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+
+## Why this exists
+
+Five or nine `claude` sessions in as many Warp tabs, and the same two questions all day:
+which one needs me, and where is it? Alt-tabbing through terminals to find the one showing
+a prompt is the tax on running agents in parallel — and the prompt you finally find is a
+yes/no you then answer by reaching back to the keyboard.
+
+So: one key per session, coloured by state and sorted so whatever needs you is on the left.
+Press it and that exact Warp pane comes forward. When Claude asks for permission, the whole
+page becomes the prompt — the command spelled out across sixteen keys, **Autoriser** /
+**Toujours** / **Refuser** underneath — and one press answers it. The terminal dialog stays
+up the whole time; whichever you answer first wins, so the deck never traps you.
+
+No daemon, no network, no telemetry. Two plugins, a few files in `~/.claude`, and hooks
+Claude Code already fires.
 
 ## State gallery
 
@@ -149,7 +208,7 @@ The sixteen detail keys are one text surface: the text is wrapped at the width o
 
 A plan waiting for approval:
 
-![A plan on the deck](docs/deck-plan.png)
+![A plan on the deck](.github/deck-plan.png)
 
 ### Permission prompts
 
@@ -208,7 +267,7 @@ Anything other than 0 means *ask in the terminal instead* — never assume an an
 
 A key is 72px. Labels are measured against real font metrics and auto-sized between 18px and 48px, wrapping onto up to three lines, but the honest ceiling is two or three short words.
 
-![A question with three options](docs/deck-ask.png)
+![A question with three options](.github/deck-ask.png)
 
 Put the reasoning in `description`. You read that on the detail keys (and in the terminal) while deciding; the key is just the button you press.
 
@@ -242,6 +301,16 @@ sh scripts/probe-deck-link.sh
 
 Forces one page switch and reads the Stream Deck log. RED means the deck's control channel is desynced (every command times out after 5 s, often after the Mac wakes up): unplug the deck for 15 s and plug it back in.
 
+## Tech stack
+
+| | |
+|---|---|
+| **Stream Deck plugin** | TypeScript (ESM, `strict`), the [`@elgato/streamdeck`](https://github.com/elgatosf/streamdeck) Node SDK, bundled to one file by Rollup. Every key is an SVG drawn at render time and pushed as a data URL — no bitmap assets, no fonts shipped. |
+| **Claude Code plugin** | POSIX shell (`jq`) for the hooks, Node for `claude-ask` and `claude-permission`, `hooks/hooks.json` for the wiring. Zero runtime dependencies. |
+| **Between them** | Two file protocols: append-only NDJSON event logs in `~/.claude/sessions/`, and one question/answer pair per prompt in `~/.claude-ask/`. No daemon, no socket, no network. |
+| **Build & release** | `corepack pnpm`, `@elgato/cli` for validate and pack, `@resvg/resvg-js` to rasterize the README art from the plugin's own key code. GitHub Actions runs every `check-*` on push and attaches the `.streamDeckPlugin` to a `v*` tag. |
+| **Tests** | No framework: hermetic `node:assert` scripts, one per piece of logic, each runnable on its own. |
+
 ## Development
 
 ```bash
@@ -254,7 +323,27 @@ With the link in place, `corepack pnpm build && corepack pnpm sd:reload` in `str
 
 Every `check-*` script is hermetic (temp `HOME`, temp `CLAUDE_ASK_DIR`) and runs in CI; every `probe-*` script needs the real deck or the real `~/.claude` and is for a human at the hardware. [`docs/development.md`](docs/development.md) has the full list, the verification checklist, the Stream Deck SDK notes and how a release is cut.
 
-## Credits
+## Roadmap
+
+Tracked in the [open issues](https://github.com/phmatray/claude-deck/issues). The themes:
+
+- **Other deck sizes.** The bundled profile is XL-only; a 5 × 3 needs its own layout and a
+  narrower detail strip — see [Limitations](#limitations).
+- **Tuning the detail strip on hardware.** Its font size, column count and line height are
+  first guesses that have had one look at a real deck. Issues with a photo are welcome.
+- **A plan that can be approved from the deck.** Blocked upstream: a `PermissionRequest`
+  hook's `allow` does not dismiss the `ExitPlanMode` dialog.
+- **Questions without the skill.** Same shape: `AskUserQuestion` cannot be answered from a
+  hook, so Claude has to call `claude-ask` for a question to reach the keys.
+
+## Contributing
+
+Issues and pull requests are welcome — including "this key is unreadable on my deck",
+which is the kind of thing only hardware in someone else's hands can tell me. Start with
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the setup, the `check-*` convention and the
+commit rules, and [`CLAUDE.md`](CLAUDE.md) for the architecture tour.
+
+## Acknowledgments
 
 Two MIT projects, merged here with their history intact:
 
@@ -265,4 +354,10 @@ Added on top: the exact-Warp-pane focus, animation only for the states that need
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE), which keeps all three copyright lines.
+[MIT](LICENSE) © 2026 [Philippe Matray](https://github.com/phmatray) — the file keeps all
+three copyright lines, this project's and the two it builds on.
+
+---
+
+If Claude Deck saves you an alt-tab, a ⭐ helps other people running agents in parallel find it.
+
