@@ -99,7 +99,13 @@ for (const [file, text] of Object.entries(after)) {
   assert.equal(text, JSON.stringify(JSON.parse(text)), `${file}: compact, no trailing newline`);
   assert.ok(!text.includes("com.julien.claudesessions"), `${file}: no old UUID left`);
 }
-const newPlugin = { Name: "Claude Deck", UUID: "com.phmatray.claudedeck", Version: "3.0.0.0" };
+// Read from the manifest the migration itself reads, rather than pinning a literal: the
+// Version there is stamped from the release version on every build, so a hard-coded copy
+// turns every release PR red for a reason that has nothing to do with the migration.
+const manifest = JSON.parse(
+  readFileSync(new URL("../stream-deck/com.phmatray.claudedeck.sdPlugin/manifest.json", import.meta.url), "utf8"),
+);
+const newPlugin = { Name: manifest.Name, UUID: manifest.UUID, Version: manifest.Version };
 const usagePage = JSON.parse(after["68A65C70-0784-47E2-8BA1-F99FEAA1B7F2.sdProfile/Profiles/C74A54B6/manifest.json"]).Controllers[0].Actions;
 assert.deepEqual(
   { ...usagePage["7,0"], States: undefined },
