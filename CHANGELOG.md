@@ -13,6 +13,13 @@ All notable changes to this project are documented here. The format follows
 Versions before 3.0.0 belong to the two upstream projects this one merges; their history
 is in this repository, but their release notes are not.
 
+## [3.0.1](https://github.com/phmatray/claude-deck/compare/v3.0.0...v3.0.1) (2026-09-18)
+
+
+### Changed
+
+* release-please cuts the releases, and the version stops being hand-written ([11ca800](https://github.com/phmatray/claude-deck/commit/11ca80093da24c1bc5abb358f7116167baafe784))
+
 ## [3.0.0] — 2026-09-18
 
 The first release of Claude Deck as one project. Two Stream Deck plugins and a set of
