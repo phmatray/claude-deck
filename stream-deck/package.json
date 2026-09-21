@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Claude Deck Stream Deck plugin: session dashboard, usage keys and answer keys",
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "build": "rollup -c && node scripts/build-profile.mjs",
     "watch": "rollup -c -w --watch.onEnd=\"bash scripts/reload-plugin.sh\"",
