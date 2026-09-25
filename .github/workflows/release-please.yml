@@ -77,7 +77,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       # Installs, builds and packs: dist/com.phmatray.claudedeck.streamDeckPlugin.
       # Needs `zip` on PATH for the bundled profile (ubuntu-latest has it).
