@@ -19,8 +19,8 @@ importers:
         specifier: ^2.6.2
         version: 2.6.2
       '@rollup/plugin-commonjs':
-        specifier: ^28.0.0
-        version: 28.0.9(rollup@4.63.4)
+        specifier: ^29.0.0
+        version: 29.0.3(rollup@4.63.4)
       '@rollup/plugin-node-resolve':
         specifier: ^15.2.2
         version: 15.3.1(rollup@4.63.4)
@@ -464,8 +464,8 @@ packages:
     resolution: {integrity: sha512-xBaJish5OeGmniDj9cW5PRa/PtmuVU3ziqrbr5xJj901ZDN4TosrVaNZpEiLZAxdfnhAe7uQ7QFWfjPe9d9K2Q==}
     engines: {node: '>= 10'}
 
-  '@rollup/plugin-commonjs@28.0.9':
-    resolution: {integrity: sha512-PIR4/OHZ79romx0BVVll/PkwWpJ7e5lsqFa3gFfcrFPWwLXLV39JVUzQV9RKjWerE7B845Hqjj9VYlQeieZ2dA==}
+  '@rollup/plugin-commonjs@29.0.3':
+    resolution: {integrity: sha512-ZaOxZceP7SOUW7Lqw5IRVweSQYWaeIPnXIGLiB690EBA3FGJTO40EEr2L5yZplJWsgTCogILRSpcAe7+U0Otdg==}
     engines: {node: '>=16.0.0 || 14 >= 14.17'}
     peerDependencies:
       rollup: ^2.68.0||^3.0.0||^4.0.0
@@ -1301,7 +1301,7 @@ snapshots:
       '@resvg/resvg-js-win32-ia32-msvc': 2.6.2
       '@resvg/resvg-js-win32-x64-msvc': 2.6.2
 
-  '@rollup/plugin-commonjs@28.0.9(rollup@4.63.4)':
+  '@rollup/plugin-commonjs@29.0.3(rollup@4.63.4)':
     dependencies:
       '@rollup/pluginutils': 5.3.0(rollup@4.63.4)
       commondir: 1.0.1
