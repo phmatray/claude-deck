@@ -172,7 +172,7 @@ importers:
     devDependencies:
       '@elgato/cli':
         specifier: ^1.7.4
-        version: 1.10.2(@types/node@20.19.43)
+        version: 1.10.3(@types/node@20.19.43)
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
@@ -209,16 +209,16 @@ importers:
 
 packages:
 
-  '@elgato/cli@1.10.2':
-    resolution: {integrity: sha512-GyLQDjN6z+ji/QFDbjmkQREScSVNu0yloca9KecIVI4smo9u0NEixepCU0t272+1GEx+OL3U+2ykQXfgGhCh6g==}
+  '@elgato/cli@1.10.3':
+    resolution: {integrity: sha512-xupuDFFgvTTy8hUfvDbI3iEMhajGrqhlVI7KE3z3fibBPdd9y4y+TjE9DzXewSYU2qqDmdEfrXDE2LnW9kgDPg==}
     engines: {node: '>=20.1.0'}
     hasBin: true
 
   '@elgato/schemas@0.4.15':
     resolution: {integrity: sha512-UpELAqazf52PFer+hqg/hvEhYoPHCH3R0af6P7Ih3Hk6xCCJENn7cA5TIpXAIGEWe6dIteHuo/e/iPGLUP7yXA==}
 
-  '@elgato/schemas@0.5.2':
-    resolution: {integrity: sha512-o3WKn69nKh4orOJZdB5Ei3OXktscFOzSO2s4mIlEEkO+wvs/b38IjSzV/dOFKjux2crTWobAmw7W1d5Vm+VucQ==}
+  '@elgato/schemas@0.5.3':
+    resolution: {integrity: sha512-S/r+ToNqz6qPy8Kzizt+hQDjICFMgLYXy/b8h7OZ4FpSHTZtWPjh6zAn9iidwPoXR3qs55zM4Oh9JRhIfKVopw==}
 
   '@elgato/streamdeck@1.4.1':
     resolution: {integrity: sha512-nk3TWfSvLrMWR6AhD6DG/pnJhWR6/xzP9elH/VLaiyZ27Nxb1Hu3rPuRty6xE5AZykwf3Auafok016wZSJZ3TA==}
@@ -1144,9 +1144,9 @@ packages:
 
 snapshots:
 
-  '@elgato/cli@1.10.2(@types/node@20.19.43)':
+  '@elgato/cli@1.10.3(@types/node@20.19.43)':
     dependencies:
-      '@elgato/schemas': 0.5.2
+      '@elgato/schemas': 0.5.3
       '@humanwhocodes/momoa': 3.3.13
       '@zip.js/zip.js': 2.23.0
       ajv: 8.20.0
@@ -1166,7 +1166,7 @@ snapshots:
 
   '@elgato/schemas@0.4.15': {}
 
-  '@elgato/schemas@0.5.2': {}
+  '@elgato/schemas@0.5.3': {}
 
   '@elgato/streamdeck@1.4.1':
     dependencies:
