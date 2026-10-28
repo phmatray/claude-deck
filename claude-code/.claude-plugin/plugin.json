@@ -1,7 +1,7 @@
 {
   "name": "claude-deck",
   "displayName": "Claude Deck",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Stream Deck for Claude Code: a live session dashboard, and questions and permission prompts answered from the keys.",
   "author": {
     "name": "Philippe Matray",
@@ -10,5 +10,12 @@
   "homepage": "https://github.com/phmatray/claude-deck",
   "repository": "https://github.com/phmatray/claude-deck",
   "license": "MIT",
-  "keywords": ["streamdeck", "elgato", "hardware", "dashboard", "questions", "permissions"]
+  "keywords": [
+    "streamdeck",
+    "elgato",
+    "hardware",
+    "dashboard",
+    "questions",
+    "permissions"
+  ]
 }
